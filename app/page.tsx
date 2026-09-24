@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
   type DragEvent,
-  type FormEvent,
+  type SubmitEvent,
   type KeyboardEvent,
 } from "react";
 
@@ -218,7 +218,7 @@ export default function Home() {
 
   /* ------------------------------ Ingestion ------------------------------ */
 
-  async function addYoutube(e: FormEvent) {
+  async function addYoutube(e: SubmitEvent) {
     e.preventDefault();
     const url = youtubeUrl.trim();
     if (!url) return;
@@ -342,7 +342,7 @@ export default function Home() {
     }
   }
 
-  function onSubmit(e: FormEvent) {
+  function onSubmit(e: SubmitEvent) {
     e.preventDefault();
     sendMessage(input);
   }
