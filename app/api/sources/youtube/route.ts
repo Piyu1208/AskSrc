@@ -15,6 +15,9 @@ import {
   type TranscriptItem,
 } from "@/lib/chunk";
 
+import { getSession } from "@/lib/get-session";
+import { createSource } from "@/lib/sources";
+
 export const runtime = "nodejs";
 
 function extractVideoId(url: string): string | null {
@@ -50,12 +53,27 @@ function createTimestampUrl(
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => null);
-    const url = body?.url;
+    // --------------------------------------------------
+    // 1. Authenticate user
+    // --------------------------------------------------
+
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
 
     // --------------------------------------------------
-    // 1. Validate URL
+    // 2. Validate request
     // --------------------------------------------------
+
+    const body = await req.json().catch(() => null);
+    const url = body?.url;
 
     if (!url || typeof url !== "string") {
       return NextResponse.json(
@@ -65,7 +83,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 2. Extract video ID
+    // 3. Extract video ID
     // --------------------------------------------------
 
     const videoId = extractVideoId(url);
@@ -81,12 +99,11 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 3. Fetch captions
+    // 4. Fetch captions
     // --------------------------------------------------
 
-    const transcript = await YoutubeTranscript.fetchTranscript(
-      videoId
-    );
+    const transcript =
+      await YoutubeTranscript.fetchTranscript(videoId);
 
     if (!transcript || transcript.length === 0) {
       return NextResponse.json(
@@ -98,7 +115,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Convert library format into our own format.
     const transcriptItems: TranscriptItem[] = transcript.map(
       (item) => ({
         text: item.text,
@@ -108,7 +124,7 @@ export async function POST(req: NextRequest) {
     );
 
     // --------------------------------------------------
-    // 4. Normalize + timestamp-aware chunking
+    // 5. Chunk transcript
     // --------------------------------------------------
 
     const chunks = chunkTranscript(transcriptItems);
@@ -123,7 +139,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 5. Generate embeddings
+    // 6. Generate embeddings
     // --------------------------------------------------
 
     const texts = chunks.map((chunk) => chunk.text);
@@ -137,15 +153,25 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 6. Ensure Qdrant collection
+    // 7. Create source
+    // --------------------------------------------------
+
+    const source = await createSource(
+      userId,
+      videoId,
+      "youtube"
+    );
+
+    const sourceId = source.id;
+
+    // --------------------------------------------------
+    // 8. Ensure Qdrant collection
     // --------------------------------------------------
 
     await ensureCollection();
 
-    const sourceId = uuidv4();
-
     // --------------------------------------------------
-    // 7. Create Qdrant points
+    // 9. Create Qdrant points
     // --------------------------------------------------
 
     const points = chunks.map((chunk, index) => ({
@@ -154,21 +180,22 @@ export async function POST(req: NextRequest) {
       vector: vectors[index],
 
       payload: {
+        // Ownership
+        userId,
         sourceId,
+
+        // Source information
         sourceType: "youtube" as const,
-
         sourceUrl: url,
-
         videoId,
 
+        // Chunk information
         chunkIndex: index,
-
         text: chunk.text,
 
+        // Timestamp information
         startTime: chunk.startTime,
-
         endTime: chunk.endTime,
-
         timestampUrl: createTimestampUrl(
           videoId,
           chunk.startTime
@@ -177,7 +204,7 @@ export async function POST(req: NextRequest) {
     }));
 
     // --------------------------------------------------
-    // 8. Store in Qdrant
+    // 10. Store in Qdrant
     // --------------------------------------------------
 
     await qdrant.upsert(COLLECTION_NAME, {
@@ -186,18 +213,14 @@ export async function POST(req: NextRequest) {
     });
 
     // --------------------------------------------------
-    // 9. Return result
+    // 11. Return result
     // --------------------------------------------------
 
     return NextResponse.json({
       success: true,
-
       sourceId,
-
       sourceType: "youtube",
-
       videoId,
-
       chunksIndexed: chunks.length,
     });
   } catch (err: any) {

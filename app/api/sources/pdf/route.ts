@@ -12,6 +12,9 @@ import { embedTexts } from "@/lib/embeddings";
 
 import { extractText } from "unpdf";
 
+import { getSession } from "@/lib/get-session";
+import { createSource } from "@/lib/sources";
+
 export const runtime = "nodejs";
 
 // --------------------------------------------------
@@ -83,7 +86,22 @@ function chunkPage(
 export async function POST(req: NextRequest) {
   try {
     // --------------------------------------------------
-    // 1. Get uploaded file
+    // 1. Authenticate user
+    // --------------------------------------------------
+
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
+
+    // --------------------------------------------------
+    // 2. Get uploaded file
     // --------------------------------------------------
 
     const formData = await req.formData();
@@ -100,7 +118,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 2. Validate PDF
+    // 3. Validate PDF
     // --------------------------------------------------
 
     if (pdfFile.type !== "application/pdf") {
@@ -113,7 +131,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 3. Read PDF
+    // 4. Read PDF
     // --------------------------------------------------
 
     const arrayBuffer = await pdfFile.arrayBuffer();
@@ -121,7 +139,7 @@ export async function POST(req: NextRequest) {
     const pdfData = new Uint8Array(arrayBuffer);
 
     // --------------------------------------------------
-    // 4. Extract text page-by-page
+    // 5. Extract text page-by-page
     // --------------------------------------------------
 
     const { text, totalPages } = await extractText(
@@ -143,7 +161,7 @@ export async function POST(req: NextRequest) {
     });
 
     // --------------------------------------------------
-    // 5. Validate extracted text
+    // 6. Validate extracted text
     // --------------------------------------------------
 
     if (allChunks.length === 0) {
@@ -157,7 +175,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 6. Generate embeddings
+    // 7. Generate embeddings
     // --------------------------------------------------
 
     const texts = allChunks.map(
@@ -173,15 +191,25 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 7. Ensure Qdrant collection
+    // 8. Create MongoDB source
+    // --------------------------------------------------
+
+    const source = await createSource(
+      userId,
+      pdfFile.name,
+      "pdf"
+    );
+
+    const sourceId = source.id;
+
+    // --------------------------------------------------
+    // 9. Ensure Qdrant collection
     // --------------------------------------------------
 
     await ensureCollection();
 
-    const sourceId = uuidv4();
-
     // --------------------------------------------------
-    // 8. Create Qdrant points
+    // 10. Create Qdrant points
     // --------------------------------------------------
 
     const points = allChunks.map(
@@ -191,23 +219,24 @@ export async function POST(req: NextRequest) {
         vector: vectors[index],
 
         payload: {
+          // Ownership
+          userId,
           sourceId,
 
+          // Source information
           sourceType: "pdf" as const,
-
           sourceName: pdfFile.name,
 
+          // Chunk information
           chunkIndex: index,
-
           pageNumber: chunk.pageNumber,
-
           text: chunk.text,
         },
       })
     );
 
     // --------------------------------------------------
-    // 9. Store in Qdrant
+    // 11. Store in Qdrant
     // --------------------------------------------------
 
     await qdrant.upsert(COLLECTION_NAME, {
@@ -216,23 +245,17 @@ export async function POST(req: NextRequest) {
     });
 
     // --------------------------------------------------
-    // 10. Return result
+    // 12. Return result
     // --------------------------------------------------
 
     return NextResponse.json({
       success: true,
-
       sourceId,
-
       sourceType: "pdf",
-
       fileName: pdfFile.name,
-
       pages: totalPages,
-
       chunksIndexed: allChunks.length,
     });
-
   } catch (err: any) {
     console.error(
       "PDF ingestion error:",

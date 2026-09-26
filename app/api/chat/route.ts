@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { qdrant, COLLECTION_NAME } from "@/lib/qdrant";
-
 import { embedTexts } from "@/lib/embeddings";
+import { getSession } from "@/lib/get-session";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ const openai = new OpenAI({
 // Body:
 // {
 //   message: string,
-//   sourceId?: string,
+//   sourceId: string,
 //   history?: {
 //     role: "user" | "assistant";
 //     content: string;
@@ -27,6 +28,27 @@ const openai = new OpenAI({
 
 export async function POST(req: NextRequest) {
   try {
+    // --------------------------------------------------
+    // 1. Authenticate user
+    // --------------------------------------------------
+
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const userId = session.user.id;
+
+    // --------------------------------------------------
+    // 2. Parse request
+    // --------------------------------------------------
+
     const body = await req.json().catch(() => null);
 
     const message = body?.message;
@@ -41,7 +63,7 @@ export async function POST(req: NextRequest) {
       | undefined;
 
     // --------------------------------------------------
-    // Validate request
+    // 3. Validate request
     // --------------------------------------------------
 
     if (!message || typeof message !== "string" || !message.trim()) {
@@ -53,10 +75,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!sourceId || typeof sourceId !== "string") {
+      return NextResponse.json(
+        {
+          error: "A 'sourceId' string is required.",
+        },
+        { status: 400 },
+      );
+    }
+
     const query = message.trim();
 
     // --------------------------------------------------
-    // 1. Embed user query
+    // 4. Verify source belongs to authenticated user
+    // --------------------------------------------------
+
+    const db = await getDb();
+
+    const source = await db.collection("sources").findOne({
+      id: sourceId,
+      userId,
+    });
+
+    if (!source) {
+      return NextResponse.json(
+        {
+          error: "Source not found.",
+        },
+        { status: 404 },
+      );
+    }
+
+    // --------------------------------------------------
+    // 5. Embed user query
     // --------------------------------------------------
 
     const [queryVector] = await embedTexts([query]);
@@ -66,7 +117,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 2. Search Qdrant
+    // 6. Search Qdrant
     // --------------------------------------------------
 
     const searchResult = await qdrant.query(COLLECTION_NAME, {
@@ -74,24 +125,26 @@ export async function POST(req: NextRequest) {
       limit: 5,
       with_payload: true,
 
-      ...(sourceId
-        ? {
-            filter: {
-              must: [
-                {
-                  key: "sourceId",
-                  match: {
-                    value: sourceId,
-                  },
-                },
-              ],
+      filter: {
+        must: [
+          {
+            key: "userId",
+            match: {
+              value: userId,
             },
-          }
-        : {}),
+          },
+          {
+            key: "sourceId",
+            match: {
+              value: sourceId,
+            },
+          },
+        ],
+      },
     });
 
     // --------------------------------------------------
-    // 3. Build context
+    // 7. Build context
     // --------------------------------------------------
 
     const context = searchResult.points
@@ -122,13 +175,13 @@ ${payload.text ?? ""}
       .join("\n");
 
     // --------------------------------------------------
-    // 4. Include recent conversation history
+    // 8. Include recent conversation history
     // --------------------------------------------------
 
     const conversationHistory = history?.slice(-10) ?? [];
 
     // --------------------------------------------------
-    // 5. Ask LLM
+    // 9. Ask LLM
     // --------------------------------------------------
 
     const response = await openai.chat.completions.create({
@@ -172,7 +225,7 @@ ${context || "No relevant context was found."}
     }
 
     // --------------------------------------------------
-    // 6. Return answer + sources
+    // 10. Return answer + sources
     // --------------------------------------------------
 
     return NextResponse.json({
