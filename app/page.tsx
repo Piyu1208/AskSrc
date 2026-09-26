@@ -156,75 +156,92 @@ function SourceRow({
   source,
   selected,
   onSelect,
+  onDelete,
 }: {
   source: Source;
   selected: boolean;
   onSelect: () => void;
+  onDelete: () => void;
 }) {
   return (
     <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        disabled={source.status !== "ready"}
-        className={`w-full rounded-lg border p-3 text-left transition-colors ${
-          selected
+      <div
+        className={`rounded-lg border transition-colors ${selected
             ? "border-teal-600 bg-teal-950/40"
-            : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
-        } ${
-          source.status !== "ready"
-            ? "cursor-default"
-            : "cursor-pointer"
-        }`}
+            : "border-zinc-800 bg-zinc-900"
+          }`}
       >
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 text-zinc-400">
-            <Icon name={source.type} className="h-5 w-5" />
-          </span>
+        <div className="flex items-start">
+          <button
+            type="button"
+            onClick={onSelect}
+            disabled={source.status !== "ready"}
+            className={`min-w-0 flex-1 p-3 text-left ${source.status !== "ready"
+                ? "cursor-default"
+                : "cursor-pointer"
+              }`}
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 text-zinc-400">
+                <Icon name={source.type} className="h-5 w-5" />
+              </span>
 
-          <div className="min-w-0 flex-1">
-            <p
-              className="truncate text-sm font-medium text-zinc-200"
-              title={source.name}
-            >
-              {source.name}
-            </p>
+              <div className="min-w-0 flex-1">
+                <p
+                  className="truncate text-sm font-medium text-zinc-200"
+                  title={source.name}
+                >
+                  {source.name}
+                </p>
+
+                {source.status === "processing" && (
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-teal-400">
+                    <Spinner className="h-3 w-3" />
+                    {source.type === "pdf"
+                      ? "Reading and embedding…"
+                      : "Fetching transcript and embedding…"}
+                  </p>
+                )}
+
+                {source.status === "ready" && (
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
+                    <span className="text-teal-400">
+                      <Icon name="check" className="h-3.5 w-3.5" />
+                    </span>
+                    {selected ? "Selected" : "Ready"} ·{" "}
+                    {source.chunks} chunks indexed
+                  </p>
+                )}
+
+                {source.status === "error" && (
+                  <p className="mt-0.5 flex items-start gap-1.5 text-xs text-red-400">
+                    <span className="mt-px shrink-0">
+                      <Icon name="alert" className="h-3.5 w-3.5" />
+                    </span>
+                    {source.error}
+                  </p>
+                )}
+              </div>
+            </div>
 
             {source.status === "processing" && (
-              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-teal-400">
-                <Spinner className="h-3 w-3" />
-                {source.type === "pdf"
-                  ? "Reading and embedding…"
-                  : "Fetching transcript and embedding…"}
-              </p>
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
+                <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] rounded-full bg-teal-600" />
+              </div>
             )}
+          </button>
 
-            {source.status === "ready" && (
-              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
-                <span className="text-teal-400">
-                  <Icon name="check" className="h-3.5 w-3.5" />
-                </span>
-                {selected ? "Selected" : "Ready"} · {source.chunks} chunks indexed
-              </p>
-            )}
-
-            {source.status === "error" && (
-              <p className="mt-0.5 flex items-start gap-1.5 text-xs text-red-400">
-                <span className="mt-px shrink-0">
-                  <Icon name="alert" className="h-3.5 w-3.5" />
-                </span>
-                {source.error}
-              </p>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="mr-2 mt-2 rounded-md p-2 text-zinc-500 transition-colors hover:bg-red-950/40 hover:text-red-400"
+            aria-label={`Delete ${source.name}`}
+            title="Delete source"
+          >
+            <Icon name="trash" className="h-4 w-4" />
+          </button>
         </div>
-
-        {source.status === "processing" && (
-          <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] rounded-full bg-teal-600" />
-          </div>
-        )}
-      </button>
+      </div>
     </li>
   );
 }
@@ -387,12 +404,12 @@ export default function Home() {
         prev.map((source) =>
           source.id === tempId
             ? {
-                id: data.sourceId,
-                type: "youtube",
-                name: source.name,
-                status: "ready",
-                chunks: data.chunksIndexed,
-              }
+              id: data.sourceId,
+              type: "youtube",
+              name: source.name,
+              status: "ready",
+              chunks: data.chunksIndexed,
+            }
             : source,
         ),
       );
@@ -459,12 +476,12 @@ export default function Home() {
         prev.map((source) =>
           source.id === tempId
             ? {
-                id: data.sourceId,
-                type: "pdf",
-                name: data.fileName ?? file.name,
-                status: "ready",
-                chunks: data.chunksIndexed,
-              }
+              id: data.sourceId,
+              type: "pdf",
+              name: data.fileName ?? file.name,
+              status: "ready",
+              chunks: data.chunksIndexed,
+            }
             : source,
         ),
       );
@@ -612,6 +629,39 @@ export default function Home() {
     }
   }
 
+  /* --------------------- Delete Source ------------------------------------ */
+  
+  const handleDeleteSource = async (sourceId: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this source?",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/sources/${sourceId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete source.");
+      }
+
+      setSources((prev) =>
+        prev.filter((source) => source.id !== sourceId),
+      );
+
+      if (selectedSourceId === sourceId) {
+        setSelectedSourceId(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error("Delete source error:", error);
+    }
+  };
+
   /* ------------------------------- Render -------------------------------- */
 
   const sidebar = (
@@ -634,11 +684,10 @@ export default function Home() {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`rounded-lg border border-dashed p-4 text-center transition-colors ${
-          dragging
+        className={`rounded-lg border border-dashed p-4 text-center transition-colors ${dragging
             ? "border-teal-600 bg-teal-950/40"
             : "border-zinc-700 bg-zinc-900"
-        }`}
+          }`}
       >
         <input
           ref={fileInputRef}
@@ -712,6 +761,7 @@ export default function Home() {
                 setSelectedSourceId(source.id);
                 setMessages([]);
               }}
+              onDelete={() => handleDeleteSource(source.id)}
             />
           ))}
         </ul>
@@ -776,9 +826,8 @@ export default function Home() {
               aria-live="polite"
             >
               {processingCount > 0
-                ? `Embedding ${processingCount} source${
-                    processingCount > 1 ? "s" : ""
-                  }…`
+                ? `Embedding ${processingCount} source${processingCount > 1 ? "s" : ""
+                }…`
                 : selectedSource
                   ? `Chatting with ${selectedSource.name}`
                   : readyCount > 0
@@ -852,11 +901,10 @@ export default function Home() {
               ) : (
                 <div key={m.id} className="group flex gap-3">
                   <div
-                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                      m.isError
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${m.isError
                         ? "bg-red-950 text-red-400"
                         : "bg-teal-700 text-white"
-                    }`}
+                      }`}
                     aria-hidden="true"
                   >
                     {m.isError ? "!" : "AI"}
@@ -864,11 +912,10 @@ export default function Home() {
 
                   <div className="min-w-0 flex-1">
                     <div
-                      className={`whitespace-pre-wrap text-sm leading-relaxed ${
-                        m.isError
+                      className={`whitespace-pre-wrap text-sm leading-relaxed ${m.isError
                           ? "text-red-400"
                           : "text-zinc-200"
-                      }`}
+                        }`}
                     >
                       {m.content}
                     </div>
@@ -918,11 +965,10 @@ export default function Home() {
         <div className="border-t border-zinc-800 bg-zinc-950 px-4 py-3">
           <form onSubmit={onSubmit} className="mx-auto max-w-2xl">
             <div
-              className={`flex items-end gap-2 rounded-xl border bg-zinc-900 p-2 transition-colors focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-500/30 ${
-                canChat
+              className={`flex items-end gap-2 rounded-xl border bg-zinc-900 p-2 transition-colors focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-500/30 ${canChat
                   ? "border-zinc-700"
                   : "border-zinc-800 bg-zinc-950"
-              }`}
+                }`}
             >
               <textarea
                 ref={textareaRef}
