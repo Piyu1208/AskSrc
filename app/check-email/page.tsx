@@ -10,13 +10,33 @@ export default function CheckEmailPage() {
 
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleResend() {
-    if (!email) return;
+    if (!email || resending || resent) return;
+
     setResending(true);
-    await authClient.sendVerificationEmail({ email });
-    setResending(false);
-    setResent(true);
+    setError("");
+
+    try {
+      const { error } = await authClient.sendVerificationEmail({
+        email,
+      });
+
+      if (error) {
+        setError(
+          error.message ?? "Couldn't resend the verification email."
+        );
+        return;
+      }
+
+      setResent(true);
+    } catch (err) {
+      console.error("Resend verification error:", err);
+      setError("Couldn't resend the verification email.");
+    } finally {
+      setResending(false);
+    }
   }
 
   return (
@@ -42,6 +62,7 @@ export default function CheckEmailPage() {
             it came from.
             <sup className="ml-1 text-base text-[#6E6A5C]">1</sup>
           </p>
+
           <p className="mt-6 border-t border-[#2A281F] pt-4 text-sm leading-relaxed text-[#8F8A7B]">
             <sup className="mr-1">1</sup>
             No guessing which document said what — every claim links
@@ -105,6 +126,12 @@ export default function CheckEmailPage() {
                 ? "Resending…"
                 : "Resend email"}
           </button>
+
+          {error && (
+            <p className="mt-3 text-center text-xs text-red-400">
+              {error}
+            </p>
+          )}
 
           <p className="mt-6 text-center text-xs text-[#5C594C]">
             Didn't receive the email? Check your spam folder.
