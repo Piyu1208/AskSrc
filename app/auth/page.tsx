@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Mode = "signin" | "signup";
 
@@ -19,14 +20,6 @@ export default function AuthPage() {
   const { data: session, isPending } = useSession();
 
   const router = useRouter();
-
-  useEffect(() => {
-    if (isPending) return;
-
-    if (session) {
-      router.replace("/");
-    }
-  }, [session, isPending, router]);
 
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
@@ -81,6 +74,8 @@ export default function AuthPage() {
 
     if (mode === "signup") {
       router.push(`/check-email?email=${encodeURIComponent(email)}`);
+    } else {
+      router.replace("/");
     }
   }
 
@@ -101,7 +96,7 @@ export default function AuthPage() {
     );
   }
 
- /*
+
   if (session) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#14130F] px-6">
@@ -119,6 +114,12 @@ export default function AuthPage() {
             {session.user.email}
           </p>
           <button
+            onClick={() => router.replace("/")}
+            className="mt-8 w-full border border-[#F3F0E8] py-2.5 font-sans text-sm text-[#F3F0E8] transition-colors hover:bg-[#F3F0E8] hover:text-[#14130F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1]"
+          >
+            Go to home
+          </button>
+          <button
             onClick={handleSignOut}
             className="mt-8 w-full border border-[#F3F0E8] py-2.5 font-sans text-sm text-[#F3F0E8] transition-colors hover:bg-[#F3F0E8] hover:text-[#14130F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1]"
           >
@@ -128,18 +129,20 @@ export default function AuthPage() {
       </main>
     );
   }
-  */
+
+
 
   return (
     <main className="flex min-h-screen bg-[#14130F] font-sans text-[#F3F0E8]">
       {/* Brand panel */}
       <div className="relative hidden w-[42%] flex-col justify-between bg-[#0D0C09] px-12 py-12 text-[#F3F0E8] lg:flex">
-        <div
-          className="text-lg"
+        <Link
+          href="/"
+          className="text-lg transition-opacity hover:opacity-70"
           style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}
         >
           AskSource
-        </div>
+        </Link>
 
         <div className="max-w-sm">
           <p
@@ -169,12 +172,13 @@ export default function AuthPage() {
       <div className="flex w-full items-center justify-center px-6 py-16 lg:w-[58%]">
         <div className="w-full max-w-sm">
           <div className="mb-10 lg:hidden">
-            <span
-              className="text-lg"
+            <Link
+              href="/"
+              className="text-lg transition-opacity hover:opacity-70"
               style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}
             >
               AskSource
-            </span>
+            </Link>
           </div>
 
           <h1
