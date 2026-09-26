@@ -270,6 +270,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
+  const [isIndexing, setIsIndexing] = useState(false);
 
   // Chat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -377,7 +378,9 @@ export default function Home() {
 
     const url = youtubeUrl.trim();
 
-    if (!url) return;
+    if (!url || isIndexing) return;
+
+    setIsIndexing(true);
 
     // Temporary frontend ID while the API is processing.
     const tempId = uid();
@@ -431,10 +434,14 @@ export default function Home() {
         status: "error",
         error: errorMessage(err, "Couldn't add this video."),
       });
+    } finally {
+      setIsIndexing(false);
     }
   }
 
   async function addPdf(file: File) {
+    if (isIndexing) return;
+
     if (
       file.type !== "application/pdf" &&
       !file.name.toLowerCase().endsWith(".pdf")
@@ -454,6 +461,8 @@ export default function Home() {
     }
 
     const tempId = uid();
+
+    setIsIndexing(true);
 
     setSources((prev) => [
       {
@@ -503,6 +512,8 @@ export default function Home() {
         status: "error",
         error: errorMessage(err, "Couldn't add this PDF."),
       });
+    } finally {
+      setIsIndexing(false);
     }
   }
 
@@ -694,18 +705,25 @@ export default function Home() {
       <div
         onDragOver={(e) => {
           e.preventDefault();
-          setDragging(true);
+          if (!isIndexing) {
+            setDragging(true);
+          }
         }}
         onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        className={`rounded-lg border border-dashed p-4 text-center transition-colors ${dragging
+        onDrop={(e) => {
+          if (isIndexing) return;
+
+          onDrop(e);
+        }}
+        className={`rounded-lg border border-dashed p-4 text-center transition-colors ${dragging && !isIndexing
           ? "border-teal-600 bg-teal-950/40"
           : "border-zinc-700 bg-zinc-900"
-          }`}
+          } ${isIndexing ? "cursor-not-allowed opacity-60" : ""}`}
       >
         <input
           ref={fileInputRef}
           type="file"
+          disabled={isIndexing}
           accept="application/pdf"
           multiple
           className="sr-only"
@@ -719,9 +737,12 @@ export default function Home() {
 
         <label
           htmlFor="pdf-input"
-          className="cursor-pointer text-sm font-medium text-teal-400 hover:underline focus-within:underline"
+          className={`text-sm font-medium ${isIndexing
+              ? "cursor-not-allowed text-zinc-500"
+              : "cursor-pointer text-teal-400 hover:underline focus-within:underline"
+            }`}
         >
-          Choose a PDF
+          {isIndexing ? "Indexing…" : "Choose a PDF"}
         </label>
 
         <p className="mt-1 text-xs text-zinc-400">
@@ -751,9 +772,10 @@ export default function Home() {
 
           <button
             type="submit"
-            className="rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-100"
+            disabled={isIndexing || !youtubeUrl.trim()}
+            className="rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-100"
           >
-            Add
+            {isIndexing ? "Indexing…" : "Add"}
           </button>
         </div>
       </form>
