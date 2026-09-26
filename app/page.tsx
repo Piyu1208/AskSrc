@@ -12,6 +12,10 @@ import {
 
 import { useSession } from "@/lib/auth-client";
 
+import { useRouter } from "next/navigation";
+
+
+
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -261,6 +265,7 @@ function SourceRow({
 
 export default function Home() {
   const { data: session, isPending: sessionLoading } = useSession();
+  const router = useRouter();
   // Sources
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
@@ -346,11 +351,10 @@ export default function Home() {
     if (sessionLoading) return;
 
     if (!session) {
-      setSources([]);
-      setSelectedSourceId(null);
-      setSourcesLoading(false);
+      router.replace("/auth");
       return;
     }
+
     async function loadSources() {
       try {
         await refreshSources();
@@ -420,8 +424,13 @@ export default function Home() {
 
       const data = await res.json();
 
+      if (res.status === 401) {
+        setSources((prev) => prev.filter((source) => source.id !== tempId));
+        router.push("/auth");
+      }
+
       if (!res.ok) {
-        throw new Error("Failed to fetch sources.");
+        throw new Error(data.error ?? "Couldn't add this video.");
       }
 
       // Replace temporary source with the real MongoDB source ID.

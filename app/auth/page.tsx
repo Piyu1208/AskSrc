@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
@@ -19,6 +19,14 @@ export default function AuthPage() {
   const { data: session, isPending } = useSession();
 
   const router = useRouter();
+
+  useEffect(() => {
+    if (isPending) return;
+
+    if (session) {
+      router.replace("/");
+    }
+  }, [session, isPending, router]);
 
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
@@ -93,6 +101,7 @@ export default function AuthPage() {
     );
   }
 
+ /*
   if (session) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#14130F] px-6">
@@ -119,6 +128,7 @@ export default function AuthPage() {
       </main>
     );
   }
+  */
 
   return (
     <main className="flex min-h-screen bg-[#14130F] font-sans text-[#F3F0E8]">
