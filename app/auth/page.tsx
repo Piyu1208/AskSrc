@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authClient, useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
 type Mode = "signin" | "signup";
 
@@ -16,6 +17,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function AuthPage() {
   const { data: session, isPending } = useSession();
+
+  const router = useRouter();
 
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
@@ -45,17 +48,30 @@ export default function AuthPage() {
     if (Object.keys(fieldErrors).length > 0) return;
 
     setSubmitting(true);
-    const { error } =
+
+    const result =
       mode === "signup"
-        ? await authClient.signUp.email({ email, password, name: name.trim() })
-        : await authClient.signIn.email({ email, password });
+        ? await authClient.signUp.email({
+          email,
+          password,
+          name: name.trim(),
+        })
+        : await authClient.signIn.email({
+          email,
+          password,
+        });
+
     setSubmitting(false);
 
-    if (error) {
-      console.error("Signup error:", error);
+    if (result.error) {
       setErrors({
-        form: error.message ?? "Something went wrong. Try again.",
+        form: result.error.message ?? "Something went wrong. Try again.",
       });
+      return;
+    }
+
+    if (mode === "signup") {
+      router.push(`/check-email?email=${encodeURIComponent(email)}`);
     }
   }
 
