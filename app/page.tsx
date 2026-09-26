@@ -155,11 +155,13 @@ function TypingDots() {
 function SourceRow({
   source,
   selected,
+  deleting,
   onSelect,
   onDelete,
 }: {
   source: Source;
   selected: boolean;
+  deleting: boolean;
   onSelect: () => void;
   onDelete: () => void;
 }) {
@@ -167,8 +169,8 @@ function SourceRow({
     <li>
       <div
         className={`rounded-lg border transition-colors ${selected
-            ? "border-teal-600 bg-teal-950/40"
-            : "border-zinc-800 bg-zinc-900"
+          ? "border-teal-600 bg-teal-950/40"
+          : "border-zinc-800 bg-zinc-900"
           }`}
       >
         <div className="flex items-start">
@@ -177,8 +179,8 @@ function SourceRow({
             onClick={onSelect}
             disabled={source.status !== "ready"}
             className={`min-w-0 flex-1 p-3 text-left ${source.status !== "ready"
-                ? "cursor-default"
-                : "cursor-pointer"
+              ? "cursor-default"
+              : "cursor-pointer"
               }`}
           >
             <div className="flex items-start gap-3">
@@ -234,11 +236,16 @@ function SourceRow({
           <button
             type="button"
             onClick={onDelete}
+            disabled={deleting}
             className="mr-2 mt-2 rounded-md p-2 text-zinc-500 transition-colors hover:bg-red-950/40 hover:text-red-400"
             aria-label={`Delete ${source.name}`}
             title="Delete source"
           >
-            <Icon name="trash" className="h-4 w-4" />
+            {deleting ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <Icon name="trash" className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>
@@ -262,6 +269,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
 
   // Chat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -632,13 +640,15 @@ export default function Home() {
   }
 
   /* --------------------- Delete Source ------------------------------------ */
-  
+
   const handleDeleteSource = async (sourceId: string) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this source?",
     );
 
     if (!confirmed) return;
+
+    setDeletingSourceId(sourceId);
 
     try {
       const res = await fetch(`/api/sources/${sourceId}`, {
@@ -661,6 +671,8 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Delete source error:", error);
+    } finally {
+      setDeletingSourceId(null);
     }
   };
 
@@ -687,8 +699,8 @@ export default function Home() {
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={`rounded-lg border border-dashed p-4 text-center transition-colors ${dragging
-            ? "border-teal-600 bg-teal-950/40"
-            : "border-zinc-700 bg-zinc-900"
+          ? "border-teal-600 bg-teal-950/40"
+          : "border-zinc-700 bg-zinc-900"
           }`}
       >
         <input
@@ -759,6 +771,7 @@ export default function Home() {
               key={source.id}
               source={source}
               selected={source.id === selectedSourceId}
+              deleting={deletingSourceId === source.id}
               onSelect={() => {
                 setSelectedSourceId(source.id);
                 setMessages([]);
@@ -904,8 +917,8 @@ export default function Home() {
                 <div key={m.id} className="group flex gap-3">
                   <div
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${m.isError
-                        ? "bg-red-950 text-red-400"
-                        : "bg-teal-700 text-white"
+                      ? "bg-red-950 text-red-400"
+                      : "bg-teal-700 text-white"
                       }`}
                     aria-hidden="true"
                   >
@@ -915,8 +928,8 @@ export default function Home() {
                   <div className="min-w-0 flex-1">
                     <div
                       className={`whitespace-pre-wrap text-sm leading-relaxed ${m.isError
-                          ? "text-red-400"
-                          : "text-zinc-200"
+                        ? "text-red-400"
+                        : "text-zinc-200"
                         }`}
                     >
                       {m.content}
@@ -968,8 +981,8 @@ export default function Home() {
           <form onSubmit={onSubmit} className="mx-auto max-w-2xl">
             <div
               className={`flex items-end gap-2 rounded-xl border bg-zinc-900 p-2 transition-colors focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-500/30 ${canChat
-                  ? "border-zinc-700"
-                  : "border-zinc-800 bg-zinc-950"
+                ? "border-zinc-700"
+                : "border-zinc-800 bg-zinc-950"
                 }`}
             >
               <textarea
