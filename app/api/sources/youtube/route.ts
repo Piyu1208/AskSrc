@@ -17,6 +17,7 @@ import {
 
 import { getSession } from "@/lib/get-session";
 import { createSource } from "@/lib/sources";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -164,53 +165,66 @@ export async function POST(req: NextRequest) {
 
     const sourceId = source.id;
 
-    // --------------------------------------------------
-    // 8. Ensure Qdrant collection
-    // --------------------------------------------------
+    const db = await getDb();
 
-    await ensureCollection();
+    try {
+      // --------------------------------------------------
+      // 8. Ensure Qdrant collection
+      // --------------------------------------------------
 
-    // --------------------------------------------------
-    // 9. Create Qdrant points
-    // --------------------------------------------------
+      await ensureCollection();
 
-    const points = chunks.map((chunk, index) => ({
-      id: uuidv4(),
+      // --------------------------------------------------
+      // 9. Create Qdrant points
+      // --------------------------------------------------
 
-      vector: vectors[index],
+      const points = chunks.map((chunk, index) => ({
+        id: uuidv4(),
 
-      payload: {
-        // Ownership
-        userId,
-        sourceId,
+        vector: vectors[index],
 
-        // Source information
-        sourceType: "youtube" as const,
-        sourceUrl: url,
-        videoId,
+        payload: {
+          // Ownership
+          userId,
+          sourceId,
 
-        // Chunk information
-        chunkIndex: index,
-        text: chunk.text,
-
-        // Timestamp information
-        startTime: chunk.startTime,
-        endTime: chunk.endTime,
-        timestampUrl: createTimestampUrl(
+          // Source information
+          sourceType: "youtube" as const,
+          sourceUrl: url,
           videoId,
-          chunk.startTime
-        ),
-      },
-    }));
 
-    // --------------------------------------------------
-    // 10. Store in Qdrant
-    // --------------------------------------------------
+          // Chunk information
+          chunkIndex: index,
+          text: chunk.text,
 
-    await qdrant.upsert(COLLECTION_NAME, {
-      wait: true,
-      points,
-    });
+          // Timestamp information
+          startTime: chunk.startTime,
+          endTime: chunk.endTime,
+          timestampUrl: createTimestampUrl(
+            videoId,
+            chunk.startTime
+          ),
+        },
+      }));
+
+      // --------------------------------------------------
+      // 10. Store in Qdrant
+      // --------------------------------------------------
+
+      await qdrant.upsert(COLLECTION_NAME, {
+        wait: true,
+        points,
+      });
+    } catch (error) {
+      await db.collection("sources").deleteOne({
+        id: sourceId,
+        userId,
+      });
+
+      throw error;
+    }
+
+
 
     // --------------------------------------------------
     // 11. Return result

@@ -14,6 +14,7 @@ import { extractText } from "unpdf";
 
 import { getSession } from "@/lib/get-session";
 import { createSource } from "@/lib/sources";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -202,47 +203,64 @@ export async function POST(req: NextRequest) {
 
     const sourceId = source.id;
 
-    // --------------------------------------------------
-    // 9. Ensure Qdrant collection
-    // --------------------------------------------------
 
-    await ensureCollection();
 
-    // --------------------------------------------------
-    // 10. Create Qdrant points
-    // --------------------------------------------------
+    const db = await getDb();
 
-    const points = allChunks.map(
-      (chunk, index) => ({
-        id: uuidv4(),
 
-        vector: vectors[index],
+    try {
 
-        payload: {
-          // Ownership
-          userId,
-          sourceId,
+      // --------------------------------------------------
+      // 9. Ensure Qdrant collection
+      // --------------------------------------------------
 
-          // Source information
-          sourceType: "pdf" as const,
-          sourceName: pdfFile.name,
+      await ensureCollection();
 
-          // Chunk information
-          chunkIndex: index,
-          pageNumber: chunk.pageNumber,
-          text: chunk.text,
-        },
-      })
-    );
+      // --------------------------------------------------
+      // 10. Create Qdrant points
+      // --------------------------------------------------
 
-    // --------------------------------------------------
-    // 11. Store in Qdrant
-    // --------------------------------------------------
+      const points = allChunks.map(
+        (chunk, index) => ({
+          id: uuidv4(),
 
-    await qdrant.upsert(COLLECTION_NAME, {
-      wait: true,
-      points,
-    });
+          vector: vectors[index],
+
+          payload: {
+            // Ownership
+            userId,
+            sourceId,
+
+            // Source information
+            sourceType: "pdf" as const,
+            sourceName: pdfFile.name,
+
+            // Chunk information
+            chunkIndex: index,
+            pageNumber: chunk.pageNumber,
+            text: chunk.text,
+          },
+        })
+      );
+
+      // --------------------------------------------------
+      // 11. Store in Qdrant
+      // --------------------------------------------------
+
+      await qdrant.upsert(COLLECTION_NAME, {
+        wait: true,
+        points,
+      });
+    } catch (error) {
+      // Qdrant failed, so remove the Mongo source
+      await db.collection("sources").deleteOne({
+        id: sourceId,
+        userId,
+      });
+
+      throw error;
+    }
+
 
     // --------------------------------------------------
     // 12. Return result
