@@ -55,6 +55,7 @@ export default function AuthPage() {
           email,
           password,
           name: name.trim(),
+          callbackURL: "/auth",
         })
         : await authClient.signIn.email({
           email,

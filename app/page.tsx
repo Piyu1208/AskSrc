@@ -10,6 +10,8 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { useSession } from "@/lib/auth-client";
+
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -258,6 +260,7 @@ function SourceRow({
 /* -------------------------------------------------------------------------- */
 
 export default function Home() {
+  const { data: session, isPending: sessionLoading } = useSession();
   // Sources
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
@@ -340,9 +343,18 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (sessionLoading) return;
+
+    if (!session) {
+      setSources([]);
+      setSelectedSourceId(null);
+      setSourcesLoading(false);
+      return;
+    }
     async function loadSources() {
       try {
         await refreshSources();
+        console.log("Session:", session);
       } catch (error) {
         console.error("Failed to load sources:", error);
       } finally {
@@ -351,7 +363,7 @@ export default function Home() {
     }
 
     loadSources();
-  }, [refreshSources]);
+  }, [session, sessionLoading, refreshSources]);
 
   /* ----------------------------- Effects -------------------------------- */
 
@@ -409,7 +421,7 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Couldn't add this video.");
+        throw new Error("Failed to fetch sources.");
       }
 
       // Replace temporary source with the real MongoDB source ID.
@@ -738,8 +750,8 @@ export default function Home() {
         <label
           htmlFor="pdf-input"
           className={`text-sm font-medium ${isIndexing
-              ? "cursor-not-allowed text-zinc-500"
-              : "cursor-pointer text-teal-400 hover:underline focus-within:underline"
+            ? "cursor-not-allowed text-zinc-500"
+            : "cursor-pointer text-teal-400 hover:underline focus-within:underline"
             }`}
         >
           {isIndexing ? "Indexing…" : "Choose a PDF"}

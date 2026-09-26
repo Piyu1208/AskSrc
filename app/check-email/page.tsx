@@ -21,6 +21,7 @@ export default function CheckEmailPage() {
     try {
       const { error } = await authClient.sendVerificationEmail({
         email,
+        callbackURL: "/auth",
       });
 
       if (error) {
