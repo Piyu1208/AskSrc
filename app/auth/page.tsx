@@ -52,7 +52,10 @@ export default function AuthPage() {
     setSubmitting(false);
 
     if (error) {
-      setErrors({ form: error.message ?? "Something went wrong. Try again." });
+      console.error("Signup error:", error);
+      setErrors({
+        form: error.message ?? "Something went wrong. Try again.",
+      });
     }
   }
 
