@@ -160,7 +160,8 @@ export async function POST(req: NextRequest) {
     const source = await createSource(
       userId,
       videoId,
-      "youtube"
+      "youtube",
+      chunks.length,
     );
 
     const sourceId = source.id;

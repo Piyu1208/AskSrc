@@ -304,12 +304,14 @@ export default function Home() {
         id: string;
         name: string;
         type: "youtube" | "pdf";
+        chunks: number;
         createdAt: string;
       }) => ({
         id: source.id,
         name: source.name,
         type: source.type,
         status: "ready",
+        chunks: source.chunks,
       }),
     );
 

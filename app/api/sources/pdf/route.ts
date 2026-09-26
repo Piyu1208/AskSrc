@@ -198,7 +198,8 @@ export async function POST(req: NextRequest) {
     const source = await createSource(
       userId,
       pdfFile.name,
-      "pdf"
+      "pdf",
+      allChunks.length,
     );
 
     const sourceId = source.id;

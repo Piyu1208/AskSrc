@@ -6,13 +6,15 @@ export type Source = {
     userId: string;
     name: string;
     type: "youtube" | "pdf";
+    chunks: number;
     createdAt: Date;
 };
 
 export async function createSource(
     userId: string,
     name: string,
-    type: Source["type"]
+    type: Source["type"],
+    chunks: number,
 ) {
     const db = await getDb();
 
@@ -21,6 +23,7 @@ export async function createSource(
         userId,
         name,
         type,
+        chunks,
         createdAt: new Date(),
     };
 
@@ -39,6 +42,7 @@ export async function getSourcesByUser(userId: string) {
             {
                 projection: {
                     _id: 0,
+                    userId: 0,
                 },
             }
         )
