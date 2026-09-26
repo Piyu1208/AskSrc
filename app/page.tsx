@@ -427,6 +427,7 @@ export default function Home() {
       if (res.status === 401) {
         setSources((prev) => prev.filter((source) => source.id !== tempId));
         router.push("/auth");
+        return;
       }
 
       if (!res.ok) {
