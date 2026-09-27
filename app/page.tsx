@@ -709,6 +709,12 @@ export default function Home() {
     }
   };
 
+  /* ---------------------- Go to Auth  --------------------------------------- */
+  async function handleGoToAuthPage() {
+    router.replace("/auth");
+    return;
+  }
+
   /* ------------------------------- Render -------------------------------- */
 
   const sidebar = (
@@ -895,16 +901,25 @@ export default function Home() {
             </p>
           </div>
 
-          {messages.length > 0 && (
+          <div className="flex items-center gap-3">
+            {messages.length > 0 && (
+              <button
+                onClick={() => setMessages([])}
+                disabled={chatLoading}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                <Icon name="trash" className="h-3.5 w-3.5" />
+                Clear chat
+              </button>
+            )}
+
             <button
-              onClick={() => setMessages([])}
-              disabled={chatLoading}
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+              onClick={handleGoToAuthPage}
+              className="rounded-md px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
             >
-              <Icon name="trash" className="h-3.5 w-3.5" />
-              Clear chat
+              Sign out
             </button>
-          )}
+          </div>
         </header>
 
         {/* Messages */}
