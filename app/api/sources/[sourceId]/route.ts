@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getSession } from "@/lib/get-session";
 import { getDb } from "@/lib/db";
-import { qdrant, COLLECTION_NAME } from "@/lib/qdrant";
+import { qdrant, COLLECTION_NAME } from "@/lib/rag/qdrant";
 
 type RouteContext = {
   params: Promise<{

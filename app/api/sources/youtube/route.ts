@@ -6,9 +6,9 @@ import {
   qdrant,
   ensureCollection,
   COLLECTION_NAME,
-} from "@/lib/qdrant";
+} from "@/lib/rag/qdrant";
 
-import { embedTexts } from "@/lib/embeddings";
+import { embedTexts } from "@/lib/rag/embeddings";
 
 import {
   chunkTranscript,
