@@ -1,11 +1,19 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import clientPromise from "./mongodb";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+
 const client = await clientPromise;
 const db = client.db("AskSource");
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  }
+});
 
 export const auth = betterAuth({
   database: mongodbAdapter(db, {
@@ -14,13 +22,13 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-     requireEmailVerification: true,
+    requireEmailVerification: true,
   },
 
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      void resend.emails.send({
-        from: "AskSource <onboarding@resend.dev>",
+      await transporter.sendMail({
+        from: `"AskSource" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: "Verify your AskSource email",
         html: `
