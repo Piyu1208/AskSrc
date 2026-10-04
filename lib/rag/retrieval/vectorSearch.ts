@@ -33,7 +33,7 @@ const RETRIEVAL_K = 20;
 export async function vectorSearch(
   queries: string[],
   userId: string,
-  sourceId: string
+  sourceIds: string[]
 ): Promise<RAGDocument[]> {
   if (queries.length === 0) {
     return [];
@@ -59,7 +59,7 @@ export async function vectorSearch(
           {
             key: "sourceId",
             match: {
-              value: sourceId,
+              any: sourceIds,
             },
           },
         ],

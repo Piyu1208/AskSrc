@@ -14,7 +14,7 @@ const MAX_RETRIES = 1;
 export async function main(
     userQuery: string,
     userId: string,
-    sourceId: string
+    sourceIds: string[]
 ): Promise<Awaited<ReturnType<typeof generateAnswer>>> {
     // ---------------------------------------------------------------------------
     // 1. Query validation
@@ -99,7 +99,7 @@ export async function main(
             const retrievedDocs = await vectorSearch(
                 rewrittenQueries,
                 userId,
-                sourceId
+                sourceIds
             );
 
             // Rerank documents
