@@ -1,12 +1,17 @@
 
 import { ObjectId, type Collection } from "mongodb";
 
-export interface MessageSource {
-  sourceId: string;
-  chunkId?: string;
-  pageNumber?: number;
-  timestamp?: number;
-}
+export type MessageSource =
+  | {
+      type: "youtube";
+      sourceId: string;
+      timestampUrl: string;
+    }
+  | {
+      type: "pdf";
+      sourceId: string;
+      pageNumber: number;
+    };
 
 export interface Message {
   _id: ObjectId;

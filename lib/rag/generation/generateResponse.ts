@@ -14,6 +14,7 @@ function formatDocument(doc: RAGDocument) {
   if (metadata.sourceType === "youtube") {
     return {
       sourceType: "youtube",
+      sourceId: metadata.sourceId,
       content: doc.pageContent,
       sourceUrl: metadata.sourceUrl,
       videoId: metadata.videoId,
@@ -25,6 +26,7 @@ function formatDocument(doc: RAGDocument) {
 
   return {
     sourceType: "pdf",
+    sourceId: metadata.sourceId,
     content: doc.pageContent,
     sourceName: metadata.sourceName,
     pageNumber: metadata.pageNumber,

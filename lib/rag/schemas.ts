@@ -3,7 +3,7 @@ import { z } from "zod";
 
 
 export const UserQuerySchema = z.object({
-    query: z
+  query: z
     .string()
     .trim()
     .min(1, "Query cannot be empty")
@@ -23,17 +23,17 @@ export const HydeResponseSchema = z.object({
 });
 
 export const QueryTransformsSchema = z.object({
-    stepback: z.string(),
-    subquestions: z.array(z.string()).length(3),
-    rewriting: z.string(),
-    hyde: z.string(),
+  stepback: z.string(),
+  subquestions: z.array(z.string()).length(3),
+  rewriting: z.string(),
+  hyde: z.string(),
 });
 
 export type QueryTransforms = z.infer<typeof QueryTransformsSchema>;
 
 
 export const RewrittenQuerySchema = z.object({
-    output: z
+  output: z
     .string()
     .trim()
     .min(1)
@@ -56,23 +56,25 @@ export const JudgeFeedbackSchema = z.object({
 
 
 const YoutubeSourceSchema = z.object({
-        type: z.literal("youtube"),
-        timestampUrl: z.string(),
-      });
+  type: z.literal("youtube"),
+  sourceId: z.string(),
+  timestampUrl: z.string(),
+});
 
 const PDFSourceSchema = z.object({
   type: z.literal("pdf"),
+  sourceId: z.string(),
   pageNumber: z.number(),
 });
 
 
 export const FinalAnswerSchema = z.object({
-    answer: z.string(),
-    sources: z.array(
-      z.discriminatedUnion("type", [
-        YoutubeSourceSchema,
-        PDFSourceSchema,
-      ])
-    ),
+  answer: z.string(),
+  sources: z.array(
+    z.discriminatedUnion("type", [
+      YoutubeSourceSchema,
+      PDFSourceSchema,
+    ])
+  ),
 });
 
