@@ -144,7 +144,17 @@ export async function POST(
     }
 
     // --------------------------------------------------------------------------
-    // 3. Save user message
+    // 3. Run RAG pipeline
+    // --------------------------------------------------------------------------
+
+    const response = await main(
+      content,
+      session.user.id,
+      chat.sourceIds
+    );
+
+    // --------------------------------------------------------------------------
+    // 4. Save user message
     // --------------------------------------------------------------------------
 
     const now = new Date();
@@ -159,10 +169,13 @@ export async function POST(
       createdAt: now,
     };
 
+    await db
+      .collection<Message>("messages")
+      .insertOne(userMessage);
 
 
     // --------------------------------------------------------------------------
-    // 4. Load previous conversation
+    // *. Load previous conversation
     // --------------------------------------------------------------------------
     /*
         const previousMessages = await db
@@ -174,22 +187,9 @@ export async function POST(
           .sort({ createdAt: 1 })
           .toArray();
     */
-    // --------------------------------------------------------------------------
-    // 5. Run RAG pipeline
-    // --------------------------------------------------------------------------
-
-    const response = await main(
-      content,
-      session.user.id,
-      chat.sourceIds
-    );
-
-    await db
-      .collection<Message>("messages")
-      .insertOne(userMessage);
 
     // --------------------------------------------------------------------------
-    // 6. Save assistant message
+    // 5. Save assistant message
     // --------------------------------------------------------------------------
 
     const assistantMessage: Message = {
@@ -207,7 +207,7 @@ export async function POST(
       .insertOne(assistantMessage);
 
     // --------------------------------------------------------------------------
-    // 7. Update chat activity
+    // 6. Update chat activity
     // --------------------------------------------------------------------------
 
     const updatedAt = new Date();
