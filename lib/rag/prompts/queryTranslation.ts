@@ -15,7 +15,7 @@ async function generateQueryTransform<T>(
     schema: z.ZodType<T>
 ): Promise<T> {
   const response = await client.responses.create({
-    model: "gpt-5-nano",
+    model: "gpt-4o-mini",
     instructions,
     input: query,
   });
