@@ -6,15 +6,18 @@ import { vectorSearch } from "./retrieval/vectorSearch";
 import { rerankDocs } from "./retrieval/rerank";
 import { generateAnswer } from "./generation/generateResponse";
 import { evaluateResponse } from "./generation/evaluateResponse";
+import { contextualizeQuery } from "./prompts/contextualizeQuery";
 
 import type { RAGDocument } from "./retrieval/vectorSearch";
+import type { ChatMessage } from "../chat/types.ts";
 
 const MAX_RETRIES = 1;
 
 export async function main(
     userQuery: string,
     userId: string,
-    sourceIds: string[]
+    sourceIds: string[],
+    chatHistory: ChatMessage[] = [],
 ): Promise<Awaited<ReturnType<typeof generateAnswer>>> {
     // ---------------------------------------------------------------------------
     // 1. Query validation
@@ -31,6 +34,19 @@ export async function main(
     }
 
     const validatedQuery = validation.data.query;
+
+    // ---------------------------------------------------------------------------
+    // Contextualize current question
+    // ---------------------------------------------------------------------------
+    let contextAwareQuery = validatedQuery;
+    if (chatHistory.length > 4) {
+        contextAwareQuery = await contextualizeQuery(
+            validatedQuery,
+            chatHistory,
+        );
+
+        console.log(`Contexualized Query: ${contextAwareQuery}`);
+    }
 
     // ---------------------------------------------------------------------------
     // 2. RAG loop state
@@ -70,7 +86,7 @@ export async function main(
                     feedback.missing_information?.join(", ") ?? "";
 
                 feedbackQuery = await rewriteQuery(
-                    validatedQuery,
+                    contextAwareQuery,
                     missingInfo
                 );
             }
@@ -82,7 +98,7 @@ export async function main(
                 rewriting,
                 hyde,
             } = await generateAllQueryTransforms(
-                feedbackQuery ?? validatedQuery
+                feedbackQuery ?? contextAwareQuery
             );
 
             // Keep all transformed queries
@@ -139,7 +155,8 @@ export async function main(
 
         response = await generateAnswer(
             rerankedDocuments,
-            generationQuery
+            generationQuery,
+            chatHistory,
         );
 
         // -------------------------------------------------------------------------
