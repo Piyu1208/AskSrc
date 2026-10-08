@@ -144,17 +144,40 @@ export async function POST(
     }
 
     // --------------------------------------------------------------------------
-    // 3. Run RAG pipeline
+    // 3. Load previous conversation
+    // --------------------------------------------------------------------------
+
+    const previousMessages = await db
+      .collection<Message>("messages")
+      .find({
+        chatId: chat._id,
+        userId: session.user.id,
+      })
+      .sort({ createdAt: 1 })
+      .toArray();
+
+    // Convert Mongo messages to the ChatMessage shape expected by main()
+    const chatHistory = previousMessages.map((message) => ({
+      id: message._id.toString(),
+      role: message.role,
+      content: message.content,
+      sources: message.sources,
+      createdAt: message.createdAt.toISOString(),
+    }));
+
+    // --------------------------------------------------------------------------
+    // 4. Run RAG pipeline
     // --------------------------------------------------------------------------
 
     const response = await main(
       content,
       session.user.id,
-      chat.sourceIds
+      chat.sourceIds,
+      chatHistory
     );
 
     // --------------------------------------------------------------------------
-    // 4. Save user message
+    // 5. Save user message
     // --------------------------------------------------------------------------
 
     const now = new Date();
@@ -173,23 +196,8 @@ export async function POST(
       .collection<Message>("messages")
       .insertOne(userMessage);
 
-
     // --------------------------------------------------------------------------
-    // *. Load previous conversation
-    // --------------------------------------------------------------------------
-    /*
-        const previousMessages = await db
-          .collection<Message>("messages")
-          .find({
-            chatId: chat._id,
-            userId: session.user.id,
-          })
-          .sort({ createdAt: 1 })
-          .toArray();
-    */
-
-    // --------------------------------------------------------------------------
-    // 5. Save assistant message
+    // 6. Save assistant message
     // --------------------------------------------------------------------------
 
     const assistantMessage: Message = {
@@ -207,7 +215,7 @@ export async function POST(
       .insertOne(assistantMessage);
 
     // --------------------------------------------------------------------------
-    // 6. Update chat activity
+    // 7. Update chat activity
     // --------------------------------------------------------------------------
 
     const updatedAt = new Date();

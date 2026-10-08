@@ -60,17 +60,75 @@ export async function generateAnswer(
   const response = await client.responses.create({
     model: "gpt-4o-mini",
     input: [
-      { 
-        role: "developer", 
-        content: SYSTEM_PROMPT 
+      {
+        role: "developer",
+        content: SYSTEM_PROMPT
       },
       {
-        role: "developer", 
+        role: "developer",
         content: `User Documents: 
         ${documents}`
-      }, 
-      ...messages, 
+      },
+      ...messages,
     ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "final_answer",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            answer: {
+              type: "string",
+            },
+            sources: {
+              type: "array",
+              items: {
+                anyOf: [
+                  {
+                    type: "object",
+                    properties: {
+                      type: {
+                        type: "string",
+                        enum: ["youtube"],
+                      },
+                      sourceId: {
+                        type: "string",
+                      },
+                      timestampUrl: {
+                        type: "string",
+                      },
+                    },
+                    required: ["type", "sourceId", "timestampUrl"],
+                    additionalProperties: false,
+                  },
+                  {
+                    type: "object",
+                    properties: {
+                      type: {
+                        type: "string",
+                        enum: ["pdf"],
+                      },
+                      sourceId: {
+                        type: "string",
+                      },
+                      pageNumber: {
+                        type: "number",
+                      },
+                    },
+                    required: ["type", "sourceId", "pageNumber"],
+                    additionalProperties: false,
+                  },
+                ],
+              },
+            },
+          },
+          required: ["answer", "sources"],
+          additionalProperties: false,
+        },
+      }
+    }
   });
 
   let parsedAnswer: unknown;
@@ -78,6 +136,7 @@ export async function generateAnswer(
   try {
     parsedAnswer = JSON.parse(response.output_text);
   } catch {
+    console.log("RAW LLM OUTPUT:", response.output_text);
     throw new Error("LLM returned invalid JSON.");
   }
 
