@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
+import { randomUUID } from "node:crypto";
+import { log } from "@/lib/observability/logger";
 
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/get-session";
@@ -81,6 +83,8 @@ export async function POST(
   req: NextRequest,
   { params }: RouteContext
 ) {
+  const requestId = randomUUID();
+
   try {
     const session = await getSession();
 
@@ -99,6 +103,12 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    log("info", "chat.request.started", {
+      requestId,
+      userId: session.user.id,
+      chatId,
+    });
 
     const body = await req.json();
 
@@ -173,7 +183,8 @@ export async function POST(
       content,
       session.user.id,
       chat.sourceIds,
-      chatHistory
+      chatHistory,
+      requestId,
     );
 
     // --------------------------------------------------------------------------
@@ -234,6 +245,9 @@ export async function POST(
     );
 
     return NextResponse.json({
+      headers: {
+        "X-Request-ID": requestId,
+      },
       userMessage,
       assistantMessage,
     });
@@ -241,8 +255,14 @@ export async function POST(
     console.error("Create message error:", error);
 
     return NextResponse.json(
-      { error: "Failed to process message" },
-      { status: 500 }
+      {
+        error: "Failed to process message",
+        requestId,
+      },
+      { 
+        status: 500,
+        headers: { "X-Request-ID": requestId },
+      }
     );
   }
 }

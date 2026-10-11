@@ -11,6 +11,8 @@ import { contextualizeQuery } from "./prompts/contextualizeQuery";
 import type { RAGDocument } from "./retrieval/vectorSearch";
 import type { ChatMessage } from "../chat/types.ts";
 
+import { log } from "@/lib/observability/logger";
+
 const MAX_RETRIES = 1;
 
 export async function main(
@@ -18,7 +20,12 @@ export async function main(
     userId: string,
     sourceIds: string[],
     chatHistory: ChatMessage[] = [],
+    requestId: string,
 ): Promise<Awaited<ReturnType<typeof generateAnswer>>> {
+
+    log("info", "rag.started", {
+        requestId,
+    });
     // ---------------------------------------------------------------------------
     // 1. Query validation
     // ---------------------------------------------------------------------------
@@ -28,9 +35,7 @@ export async function main(
     });
 
     if (!validation.success) {
-        throw new Error(
-            `Invalid user query: ${validation.error.message}`
-        );
+        throw new Error(`Invalid user query: ${validation.error.message}`);
     }
 
     const validatedQuery = validation.data.query;
@@ -39,11 +44,8 @@ export async function main(
     // Contextualize current question
     // ---------------------------------------------------------------------------
     let contextAwareQuery = validatedQuery;
-    if (chatHistory.length > 4) {
-        contextAwareQuery = await contextualizeQuery(
-            validatedQuery,
-            chatHistory,
-        );
+    if (chatHistory.length >= 2) {
+        contextAwareQuery = await contextualizeQuery(validatedQuery, chatHistory);
 
         console.log(`Contexualized Query: ${contextAwareQuery}`);
     }
@@ -56,10 +58,7 @@ export async function main(
 
     let response: Awaited<ReturnType<typeof generateAnswer>>;
 
-    let failureType:
-        | "retrieval"
-        | "generation"
-        | undefined;
+    let failureType: "retrieval" | "generation" | undefined;
 
     let rerankedDocuments: RAGDocument[] = [];
 
@@ -82,24 +81,14 @@ export async function main(
                     throw new Error("Feedback is missing before retry.");
                 }
 
-                const missingInfo =
-                    feedback.missing_information?.join(", ") ?? "";
+                const missingInfo = feedback.missing_information?.join(", ") ?? "";
 
-                feedbackQuery = await rewriteQuery(
-                    contextAwareQuery,
-                    missingInfo
-                );
+                feedbackQuery = await rewriteQuery(contextAwareQuery, missingInfo);
             }
 
             // Query translation
-            const {
-                stepback,
-                subquestions,
-                rewriting,
-                hyde,
-            } = await generateAllQueryTransforms(
-                feedbackQuery ?? contextAwareQuery
-            );
+            const { stepback, subquestions, rewriting, hyde } =
+                await generateAllQueryTransforms(feedbackQuery ?? contextAwareQuery);
 
             // Keep all transformed queries
             const rewrittenQueries: string[] = [
@@ -107,15 +96,13 @@ export async function main(
                 ...subquestions,
                 rewriting,
                 hyde,
-            ].filter(
-                (query): query is string => Boolean(query)
-            );
+            ].filter((query): query is string => Boolean(query));
 
             // Vector search with user + source isolation
             const retrievedDocs = await vectorSearch(
                 rewrittenQueries,
                 userId,
-                sourceIds
+                sourceIds,
             );
 
             // Rerank documents
@@ -123,7 +110,7 @@ export async function main(
                 retrievedDocs,
                 9,
                 validatedQuery,
-                feedbackQuery
+                feedbackQuery,
             );
         }
 
@@ -138,13 +125,11 @@ export async function main(
                 throw new Error("Feedback is missing before retry.");
             }
 
-            const generationFeedback =
-                feedback.generation_feedback?.join(", ") ?? "";
+            const generationFeedback = feedback.generation_feedback?.join(", ") ?? "";
 
-            generationQuery =
-                `${validatedQuery}, ${generationFeedback}`;
+            generationQuery = `${validatedQuery}, ${generationFeedback}`;
 
-            console.log('Query with generation feedback: ', generationQuery);
+            console.log("Query with generation feedback: ", generationQuery);
         }
 
         // -------------------------------------------------------------------------
@@ -166,7 +151,7 @@ export async function main(
         feedback = await evaluateResponse(
             rerankedDocuments,
             generationQuery,
-            response
+            response,
         );
 
         console.log("Feedback:", feedback);
@@ -176,13 +161,17 @@ export async function main(
         // -------------------------------------------------------------------------
 
         if (!feedback.retry || i === MAX_RETRIES) {
-            console.log("Success.");
+
+            log("info", "rag.completed", {
+                requestId,
+                status: "success",
+            });
+
             return response;
         }
 
         // failure_type can be null according to the schema
-        failureType =
-            feedback.failure_type ?? undefined;
+        failureType = feedback.failure_type ?? undefined;
     }
 
     throw new Error("RAG pipeline failed unexpectedly.");
