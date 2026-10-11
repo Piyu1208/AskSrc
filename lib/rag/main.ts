@@ -83,7 +83,7 @@ export async function main(
             requestId,
             "rag.contextualization.completed",
             {},
-            () => contextualizeQuery(validatedQuery, chatHistory),
+            () => contextualizeQuery(validatedQuery, chatHistory, requestId),
         );
 
         console.log(`Contexualized Query: ${contextAwareQuery}`);
@@ -132,7 +132,8 @@ export async function main(
                     "rag.query_transformation.completed",
                     { attempt: i + 1 },
                     () => generateAllQueryTransforms(
-                        feedbackQuery ?? contextAwareQuery
+                        feedbackQuery ?? contextAwareQuery,
+                        requestId,
                     ),
                 );
 
@@ -220,6 +221,7 @@ export async function main(
                 rerankedDocuments,
                 generationQuery,
                 chatHistory,
+                requestId,
             ),
         );
 
@@ -235,6 +237,7 @@ export async function main(
                 rerankedDocuments,
                 generationQuery,
                 response,
+                requestId,
             ),
         );
 

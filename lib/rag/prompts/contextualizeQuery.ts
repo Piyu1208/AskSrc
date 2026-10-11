@@ -1,6 +1,7 @@
 import { OpenAI } from "openai";
 import type { ChatMessage } from "../../chat/types.ts";
 import { RewrittenQuerySchema } from "../schemas";
+import { log } from "@/lib/observability/logger";
 
 const client = new OpenAI({
   baseURL: `https://aicredits.in/v1`,
@@ -10,6 +11,7 @@ const client = new OpenAI({
 export async function contextualizeQuery(
   userQuery: string,
   chatHistory: ChatMessage[] = [],
+  requestId: string,
 ): Promise<string> {
   const messages = [
     ...chatHistory
@@ -46,6 +48,17 @@ export async function contextualizeQuery(
       },
       ...messages,
     ],
+  });
+
+  const usage = response.usage;
+
+  log("info", "llm.usage", {
+    requestId,
+    stage: "contextualization",
+    model: "gpt-5-nano",
+    inputTokens: usage?.input_tokens ?? null,
+    outputTokens: usage?.output_tokens ?? null,
+    totalTokens: usage?.total_tokens ?? null,
   });
 
   let parsedQuery: unknown;

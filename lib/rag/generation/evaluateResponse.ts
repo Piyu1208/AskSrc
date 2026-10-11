@@ -3,6 +3,7 @@ import { JUDGE_SYS_PROMPT } from "../prompts/prompts";
 import { JudgeFeedbackSchema, FinalAnswerSchema } from "../schemas";
 import type { RAGDocument } from "../retrieval/vectorSearch";
 import type { z } from "zod";
+import { log } from "@/lib/observability/logger";
 
 const client = new OpenAI({
   baseURL: "https://aicredits.in/v1",
@@ -42,6 +43,7 @@ export async function evaluateResponse(
   rerankedDocuments: RAGDocument[],
   userQuery: string,
   response: FinalAnswer,
+  requestId: string,
 ) {
   const documents = rerankedDocuments
     .map(formatDocument)
@@ -59,6 +61,15 @@ ${userQuery}
 
 Answer:
 ${JSON.stringify(response, null, 2)}`,
+  });
+
+  log("info", "llm.usage", {
+    requestId,
+    stage: "response_evaluation",
+    model: "gpt-4o-mini",
+    inputTokens: judgeResponse.usage?.input_tokens ?? null,
+    outputTokens: judgeResponse.usage?.output_tokens ?? null,
+    totalTokens: judgeResponse.usage?.total_tokens ?? null,
   });
 
   let parsedFeedback: unknown;

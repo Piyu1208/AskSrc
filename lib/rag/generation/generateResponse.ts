@@ -3,6 +3,7 @@ import { SYSTEM_PROMPT } from "../prompts/prompts";
 import { FinalAnswerSchema } from "../schemas";
 import type { RAGDocument } from "../retrieval/vectorSearch";
 import type { ChatMessage } from "../../chat/types.ts";
+import { log } from "@/lib/observability/logger";
 
 const client = new OpenAI({
   baseURL: "https://aicredits.in/v1",
@@ -37,7 +38,8 @@ function formatDocument(doc: RAGDocument) {
 export async function generateAnswer(
   rerankedDocuments: RAGDocument[],
   userQuery: string,
-  chatHistory: ChatMessage[] = []
+  chatHistory: ChatMessage[] = [],
+  requestId: string,
 ) {
   const documents = rerankedDocuments
     .map(formatDocument)
@@ -129,6 +131,15 @@ export async function generateAnswer(
         },
       }
     }
+  });
+
+  log("info", "llm.usage", {
+    requestId,
+    stage: "answer_generation",
+    model: "gpt-4o-mini",
+    inputTokens: response.usage?.input_tokens ?? null,
+    outputTokens: response.usage?.output_tokens ?? null,
+    totalTokens: response.usage?.total_tokens ?? null,
   });
 
   let parsedAnswer: unknown;
