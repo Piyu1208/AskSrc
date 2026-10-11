@@ -14,6 +14,7 @@ export async function contextualizeQuery(
   const messages = [
     ...chatHistory
       .filter((message) => !message.isError)
+      .slice(-8)
       .map((message) => ({
         role: message.role,
         content: message.content,

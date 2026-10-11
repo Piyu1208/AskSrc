@@ -15,6 +15,39 @@ import { log } from "@/lib/observability/logger";
 
 const MAX_RETRIES = 1;
 
+
+async function measureStage<T>(
+    requestId: string,
+    event: string,
+    data: Record<string, unknown>,
+    operation: () => Promise<T>,
+): Promise<T> {
+    const startedAt = performance.now();
+
+    try {
+        const result = await operation();
+
+        log("info", event, {
+            requestId,
+            ...data,
+            latencyMs: Math.round(performance.now() - startedAt),
+        });
+
+        return result;
+    } catch (error) {
+        log("error", `${event}.failed`, {
+            requestId,
+            ...data,
+            latencyMs: Math.round(performance.now() - startedAt),
+            errorName:
+                error instanceof Error ? error.name : "UnknownError",
+        });
+
+        throw error;
+    }
+}
+
+
 export async function main(
     userQuery: string,
     userId: string,
@@ -22,6 +55,7 @@ export async function main(
     chatHistory: ChatMessage[] = [],
     requestId: string,
 ): Promise<Awaited<ReturnType<typeof generateAnswer>>> {
+    const pipelineStartedAt = performance.now();
 
     log("info", "rag.started", {
         requestId,
@@ -45,7 +79,12 @@ export async function main(
     // ---------------------------------------------------------------------------
     let contextAwareQuery = validatedQuery;
     if (chatHistory.length >= 2) {
-        contextAwareQuery = await contextualizeQuery(validatedQuery, chatHistory);
+        contextAwareQuery = await measureStage(
+            requestId,
+            "rag.contextualization.completed",
+            {},
+            () => contextualizeQuery(validatedQuery, chatHistory),
+        );
 
         console.log(`Contexualized Query: ${contextAwareQuery}`);
     }
@@ -88,7 +127,14 @@ export async function main(
 
             // Query translation
             const { stepback, subquestions, rewriting, hyde } =
-                await generateAllQueryTransforms(feedbackQuery ?? contextAwareQuery);
+                await measureStage(
+                    requestId,
+                    "rag.query_transformation.completed",
+                    { attempt: i + 1 },
+                    () => generateAllQueryTransforms(
+                        feedbackQuery ?? contextAwareQuery
+                    ),
+                );
 
             // Keep all transformed queries
             const rewrittenQueries: string[] = [
@@ -99,19 +145,47 @@ export async function main(
             ].filter((query): query is string => Boolean(query));
 
             // Vector search with user + source isolation
-            const retrievedDocs = await vectorSearch(
-                rewrittenQueries,
-                userId,
-                sourceIds,
+            const retrievedDocs = await measureStage(
+                requestId,
+                "rag.retrieval.completed",
+                {
+                    attempt: i + 1,
+                    queryCount: rewrittenQueries.length,
+                },
+                () => vectorSearch(
+                    rewrittenQueries,
+                    userId,
+                    sourceIds,
+                ),
             );
 
+            log("info", "rag.retrieval.results", {
+                requestId,
+                attempt: i + 1,
+                retrievedCount: retrievedDocs.length,
+            });
+
             // Rerank documents
-            rerankedDocuments = await rerankDocs(
-                retrievedDocs,
-                9,
-                validatedQuery,
-                feedbackQuery,
+            rerankedDocuments = await measureStage(
+                requestId,
+                "rag.reranking.completed",
+                {
+                    attempt: i + 1,
+                    inputCount: retrievedDocs.length,
+                },
+                () => rerankDocs(
+                    retrievedDocs,
+                    9,
+                    validatedQuery,
+                    feedbackQuery,
+                ),
             );
+
+            log("info", "rag.reranking.results", {
+                requestId,
+                attempt: i + 1,
+                rerankedCount: rerankedDocuments.length,
+            });
         }
 
         // -------------------------------------------------------------------------
@@ -138,23 +212,38 @@ export async function main(
 
         console.log("Generating response...");
 
-        response = await generateAnswer(
-            rerankedDocuments,
-            generationQuery,
-            chatHistory,
+        response = await measureStage(
+            requestId,
+            "rag.generation.completed",
+            { attempt: i + 1 },
+            () => generateAnswer(
+                rerankedDocuments,
+                generationQuery,
+                chatHistory,
+            ),
         );
 
         // -------------------------------------------------------------------------
         // Judge answer
         // -------------------------------------------------------------------------
 
-        feedback = await evaluateResponse(
-            rerankedDocuments,
-            generationQuery,
-            response,
+        feedback = await measureStage(
+            requestId,
+            "rag.evaluation.completed",
+            { attempt: i + 1 },
+            () => evaluateResponse(
+                rerankedDocuments,
+                generationQuery,
+                response,
+            ),
         );
 
-        console.log("Feedback:", feedback);
+        log("info", "rag.judge.decision", {
+            requestId,
+            attempt: i + 1,
+            retry: feedback.retry,
+            failureType: feedback.failure_type,
+        });
 
         // -------------------------------------------------------------------------
         // Decide whether to retry
@@ -165,6 +254,11 @@ export async function main(
             log("info", "rag.completed", {
                 requestId,
                 status: "success",
+                attempts: i + 1,
+                retryCount: i,
+                totalLatencyMs: Math.round(
+                    performance.now() - pipelineStartedAt
+                ),
             });
 
             return response;
