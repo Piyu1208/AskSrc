@@ -13,39 +13,13 @@ import type { ChatMessage } from "../chat/types.ts";
 
 import { log } from "@/lib/observability/logger";
 
+import type { StageUsage, TokenUsageSummary, OnTokenUsage } from "@/lib/observability/tokenUsage";
+import { recordTokenUsage, measureStage } from "@/lib/observability/tokenUsage";
+
 const MAX_RETRIES = 1;
 
 
-async function measureStage<T>(
-    requestId: string,
-    event: string,
-    data: Record<string, unknown>,
-    operation: () => Promise<T>,
-): Promise<T> {
-    const startedAt = performance.now();
 
-    try {
-        const result = await operation();
-
-        log("info", event, {
-            requestId,
-            ...data,
-            latencyMs: Math.round(performance.now() - startedAt),
-        });
-
-        return result;
-    } catch (error) {
-        log("error", `${event}.failed`, {
-            requestId,
-            ...data,
-            latencyMs: Math.round(performance.now() - startedAt),
-            errorName:
-                error instanceof Error ? error.name : "UnknownError",
-        });
-
-        throw error;
-    }
-}
 
 
 export async function main(
@@ -55,6 +29,30 @@ export async function main(
     chatHistory: ChatMessage[] = [],
     requestId: string,
 ): Promise<Awaited<ReturnType<typeof generateAnswer>>> {
+
+    const tokenUsage: TokenUsageSummary = {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        calls: 0,
+        byStage: {},
+    };
+
+    const onTokenUsage: OnTokenUsage = (
+        stage,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+    ) => {
+        recordTokenUsage(
+            tokenUsage,
+            stage,
+            inputTokens,
+            outputTokens,
+            totalTokens,
+        );
+    };
+
     const pipelineStartedAt = performance.now();
 
     log("info", "rag.started", {
@@ -83,7 +81,12 @@ export async function main(
             requestId,
             "rag.contextualization.completed",
             {},
-            () => contextualizeQuery(validatedQuery, chatHistory, requestId),
+            () => contextualizeQuery(
+                validatedQuery,
+                chatHistory,
+                requestId,
+                onTokenUsage,
+            ),
         );
 
         console.log(`Contexualized Query: ${contextAwareQuery}`);
@@ -122,7 +125,17 @@ export async function main(
 
                 const missingInfo = feedback.missing_information?.join(", ") ?? "";
 
-                feedbackQuery = await rewriteQuery(contextAwareQuery, missingInfo);
+                feedbackQuery = await measureStage(
+                    requestId,
+                    "rag.query_rewriting.completed",
+                    {},
+                    () => rewriteQuery(
+                        contextAwareQuery,
+                        missingInfo,
+                        requestId,
+                        onTokenUsage,
+                    )
+                );
             }
 
             // Query translation
@@ -134,6 +147,7 @@ export async function main(
                     () => generateAllQueryTransforms(
                         feedbackQuery ?? contextAwareQuery,
                         requestId,
+                        onTokenUsage,
                     ),
                 );
 
@@ -222,6 +236,7 @@ export async function main(
                 generationQuery,
                 chatHistory,
                 requestId,
+                onTokenUsage,
             ),
         );
 
@@ -238,6 +253,7 @@ export async function main(
                 generationQuery,
                 response,
                 requestId,
+                onTokenUsage,
             ),
         );
 
@@ -262,6 +278,11 @@ export async function main(
                 totalLatencyMs: Math.round(
                     performance.now() - pipelineStartedAt
                 ),
+            });
+
+            log("info", "llm.usage.summary", {
+                requestId,
+                ...tokenUsage,
             });
 
             return response;

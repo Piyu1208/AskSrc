@@ -4,11 +4,13 @@ import { FinalAnswerSchema } from "../schemas";
 import type { RAGDocument } from "../retrieval/vectorSearch";
 import type { ChatMessage } from "../../chat/types.ts";
 import { log } from "@/lib/observability/logger";
+import type { OnTokenUsage } from "@/lib/observability/tokenUsage";
 
 const client = new OpenAI({
   baseURL: "https://aicredits.in/v1",
   apiKey: process.env.OPENAI_API_KEY,
 });
+
 
 function formatDocument(doc: RAGDocument) {
   const { metadata } = doc;
@@ -40,6 +42,7 @@ export async function generateAnswer(
   userQuery: string,
   chatHistory: ChatMessage[] = [],
   requestId: string,
+  onTokenUsage?: OnTokenUsage,
 ) {
   const documents = rerankedDocuments
     .map(formatDocument)
@@ -141,6 +144,17 @@ export async function generateAnswer(
     outputTokens: response.usage?.output_tokens ?? null,
     totalTokens: response.usage?.total_tokens ?? null,
   });
+
+  const usage = response.usage;
+
+  if (usage) {
+    onTokenUsage?.(
+      "answer_generation",
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.total_tokens,
+    );
+  }
 
   let parsedAnswer: unknown;
 

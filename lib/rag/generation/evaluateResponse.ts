@@ -4,6 +4,7 @@ import { JudgeFeedbackSchema, FinalAnswerSchema } from "../schemas";
 import type { RAGDocument } from "../retrieval/vectorSearch";
 import type { z } from "zod";
 import { log } from "@/lib/observability/logger";
+import type { OnTokenUsage } from "@/lib/observability/tokenUsage";
 
 const client = new OpenAI({
   baseURL: "https://aicredits.in/v1",
@@ -44,6 +45,7 @@ export async function evaluateResponse(
   userQuery: string,
   response: FinalAnswer,
   requestId: string,
+  onTokenUsage?: OnTokenUsage,
 ) {
   const documents = rerankedDocuments
     .map(formatDocument)
@@ -71,6 +73,17 @@ ${JSON.stringify(response, null, 2)}`,
     outputTokens: judgeResponse.usage?.output_tokens ?? null,
     totalTokens: judgeResponse.usage?.total_tokens ?? null,
   });
+
+  const usage = judgeResponse.usage;
+
+  if (usage) {
+    onTokenUsage?.(
+      "response_evaluation",
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.total_tokens,
+    );
+  }
 
   let parsedFeedback: unknown;
 

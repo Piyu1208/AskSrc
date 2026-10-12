@@ -2,6 +2,7 @@ import { OpenAI } from "openai";
 import type { ChatMessage } from "../../chat/types.ts";
 import { RewrittenQuerySchema } from "../schemas";
 import { log } from "@/lib/observability/logger";
+import type { OnTokenUsage } from "@/lib/observability/tokenUsage";
 
 const client = new OpenAI({
   baseURL: `https://aicredits.in/v1`,
@@ -12,6 +13,7 @@ export async function contextualizeQuery(
   userQuery: string,
   chatHistory: ChatMessage[] = [],
   requestId: string,
+  onTokenUsage?: OnTokenUsage,
 ): Promise<string> {
   const messages = [
     ...chatHistory
@@ -60,6 +62,15 @@ export async function contextualizeQuery(
     outputTokens: usage?.output_tokens ?? null,
     totalTokens: usage?.total_tokens ?? null,
   });
+
+  if (usage) {
+    onTokenUsage?.(
+      "contextualization",
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.total_tokens,
+    );
+  }
 
   let parsedQuery: unknown;
 

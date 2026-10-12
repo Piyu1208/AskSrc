@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRANSLATOR_SYSTEM_PROMPT, HYDE_SYS_PROMPT } from "./prompts";
 import { QueryTransformsSchema, QueryTransforms, TranslatorResponseSchema, HydeResponseSchema } from '../schemas';
 import { log } from "@/lib/observability/logger";
+import type { OnTokenUsage } from "@/lib/observability/tokenUsage";
 
 const client = new OpenAI({
   baseURL: `https://aicredits.in/v1`,
@@ -16,6 +17,7 @@ async function generateQueryTransform<T>(
   schema: z.ZodType<T>,
   requestId: string,
   stage: string,
+  onTokenUsage?: OnTokenUsage,
 ): Promise<T> {
   const response = await client.responses.create({
     model: "gpt-4o-mini",
@@ -32,6 +34,17 @@ async function generateQueryTransform<T>(
     totalTokens: response.usage?.total_tokens ?? null,
   });
 
+  const usage = response.usage;
+
+  if (usage) {
+    onTokenUsage?.(
+      stage,
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.total_tokens,
+    );
+  }
+
   const parsed = JSON.parse(response.output_text);
 
   return schema.parse(parsed);
@@ -43,6 +56,7 @@ async function generateQueryTransform<T>(
 export async function generateAllQueryTransforms(
   query: string,
   requestId: string,
+  onTokenUsage?: OnTokenUsage,
 ): Promise<QueryTransforms> {
   const [translator, hyde] = await Promise.all([
     generateQueryTransform(
@@ -51,6 +65,7 @@ export async function generateAllQueryTransforms(
       TranslatorResponseSchema,
       requestId,
       "query_translation",
+      onTokenUsage,
     ),
 
     generateQueryTransform(
@@ -59,6 +74,7 @@ export async function generateAllQueryTransforms(
       HydeResponseSchema,
       requestId,
       "hyde",
+      onTokenUsage,
     ),
   ]);
 
