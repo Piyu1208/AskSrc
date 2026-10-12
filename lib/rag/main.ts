@@ -1,3 +1,4 @@
+
 import { generateAllQueryTransforms } from "./prompts/queryTranslation";
 import { rewriteQuery } from "./prompts/rewriteQuery";
 
@@ -13,14 +14,17 @@ import type { ChatMessage } from "../chat/types.ts";
 
 import { log } from "@/lib/observability/logger";
 
-import type { StageUsage, TokenUsageSummary, OnTokenUsage } from "@/lib/observability/tokenUsage";
-import { recordTokenUsage, measureStage } from "@/lib/observability/tokenUsage";
+import type {
+    TokenUsageSummary,
+    OnTokenUsage,
+} from "@/lib/observability/tokenUsage";
+
+import {
+    recordTokenUsage,
+    measureStage,
+} from "@/lib/observability/tokenUsage";
 
 const MAX_RETRIES = 1;
-
-
-
-
 
 export async function main(
     userQuery: string,
@@ -29,7 +33,6 @@ export async function main(
     chatHistory: ChatMessage[] = [],
     requestId: string,
 ): Promise<Awaited<ReturnType<typeof generateAnswer>>> {
-
     const tokenUsage: TokenUsageSummary = {
         inputTokens: 0,
         outputTokens: 0,
@@ -55,95 +58,104 @@ export async function main(
 
     const pipelineStartedAt = performance.now();
 
-    log("info", "rag.started", {
-        requestId,
-    });
-    // ---------------------------------------------------------------------------
-    // 1. Query validation
-    // ---------------------------------------------------------------------------
+    let pipelineStatus: "success" | "error" = "error";
+    let attempts = 0;
 
-    const validation = UserQuerySchema.safeParse({
-        query: userQuery,
-    });
+    try {
+        log("info", "rag.started", { requestId });
 
-    if (!validation.success) {
-        throw new Error(`Invalid user query: ${validation.error.message}`);
-    }
+        // 1. Validate the query
+        const validation = UserQuerySchema.safeParse({
+            query: userQuery,
+        });
 
-    const validatedQuery = validation.data.query;
+        if (!validation.success) {
+            throw new Error(
+                `Invalid user query: ${validation.error.message}`,
+            );
+        }
 
-    // ---------------------------------------------------------------------------
-    // Contextualize current question
-    // ---------------------------------------------------------------------------
-    let contextAwareQuery = validatedQuery;
-    if (chatHistory.length >= 2) {
-        contextAwareQuery = await measureStage(
-            requestId,
-            "rag.contextualization.completed",
-            {},
-            () => contextualizeQuery(
-                validatedQuery,
-                chatHistory,
+        const validatedQuery = validation.data.query;
+
+        // 2. Contextualize the current question
+        let contextAwareQuery = validatedQuery;
+
+        if (chatHistory.length >= 2) {
+            contextAwareQuery = await measureStage(
                 requestId,
-                onTokenUsage,
-            ),
-        );
+                "rag.contextualization.completed",
+                {},
+                () => contextualizeQuery(
+                    validatedQuery,
+                    chatHistory,
+                    requestId,
+                    onTokenUsage,
+                ),
+            );
 
-        console.log(`Contexualized Query: ${contextAwareQuery}`);
-    }
+            console.log(
+                `Contextualized Query: ${contextAwareQuery}`,
+            );
+        }
 
-    // ---------------------------------------------------------------------------
-    // 2. RAG loop state
-    // ---------------------------------------------------------------------------
+        // 3. RAG loop state
+        let feedback:
+            | Awaited<ReturnType<typeof evaluateResponse>>
+            | undefined;
 
-    let feedback: Awaited<ReturnType<typeof evaluateResponse>> | undefined;
+        let response:
+            Awaited<ReturnType<typeof generateAnswer>>;
 
-    let response: Awaited<ReturnType<typeof generateAnswer>>;
+        let failureType: "retrieval" | "generation" | undefined;
 
-    let failureType: "retrieval" | "generation" | undefined;
+        let rerankedDocuments: RAGDocument[] = [];
+        let feedbackQuery: string | undefined;
 
-    let rerankedDocuments: RAGDocument[] = [];
+        // Last retrieval metrics, retained for generation-only retries
+        let queryCount = 0;
+        let retrievedCount = 0;
 
-    let feedbackQuery: string | undefined;
+        // 4. RAG retry loop
+        for (let i = 0; i <= MAX_RETRIES; i++) {
+            attempts = i + 1;
 
-    // ---------------------------------------------------------------------------
-    // 3. RAG retry loop
-    // ---------------------------------------------------------------------------
+            console.log(`Loop number: ${attempts}`);
 
-    for (let i = 0; i <= MAX_RETRIES; i++) {
-        console.log(`Loop number: ${i + 1}`);
+            // Retrieval
+            if (i === 0 || failureType === "retrieval") {
+                if (i > 0) {
+                    if (!feedback) {
+                        throw new Error(
+                            "Feedback is missing before retry.",
+                        );
+                    }
 
-        // -------------------------------------------------------------------------
-        // Retrieval
-        // -------------------------------------------------------------------------
+                    const missingInfo =
+                        feedback.missing_information?.join(", ") ?? "";
 
-        if (i === 0 || failureType === "retrieval") {
-            if (i > 0) {
-                if (!feedback) {
-                    throw new Error("Feedback is missing before retry.");
+                    feedbackQuery = await measureStage(
+                        requestId,
+                        "rag.query_rewriting.completed",
+                        { attempt: attempts },
+                        () => rewriteQuery(
+                            contextAwareQuery,
+                            missingInfo,
+                            requestId,
+                            onTokenUsage,
+                        ),
+                    );
                 }
 
-                const missingInfo = feedback.missing_information?.join(", ") ?? "";
-
-                feedbackQuery = await measureStage(
-                    requestId,
-                    "rag.query_rewriting.completed",
-                    {},
-                    () => rewriteQuery(
-                        contextAwareQuery,
-                        missingInfo,
-                        requestId,
-                        onTokenUsage,
-                    )
-                );
-            }
-
-            // Query translation
-            const { stepback, subquestions, rewriting, hyde } =
-                await measureStage(
+                // Query transformation
+                const {
+                    stepback,
+                    subquestions,
+                    rewriting,
+                    hyde,
+                } = await measureStage(
                     requestId,
                     "rag.query_transformation.completed",
-                    { attempt: i + 1 },
+                    { attempt: attempts },
                     () => generateAllQueryTransforms(
                         feedbackQuery ?? contextAwareQuery,
                         requestId,
@@ -151,146 +163,189 @@ export async function main(
                     ),
                 );
 
-            // Keep all transformed queries
-            const rewrittenQueries: string[] = [
-                stepback,
-                ...subquestions,
-                rewriting,
-                hyde,
-            ].filter((query): query is string => Boolean(query));
+                const rewrittenQueries: string[] = [
+                    stepback,
+                    ...subquestions,
+                    rewriting,
+                    hyde,
+                ].filter(
+                    (query): query is string => Boolean(query),
+                );
 
-            // Vector search with user + source isolation
-            const retrievedDocs = await measureStage(
-                requestId,
-                "rag.retrieval.completed",
-                {
-                    attempt: i + 1,
-                    queryCount: rewrittenQueries.length,
-                },
-                () => vectorSearch(
-                    rewrittenQueries,
-                    userId,
-                    sourceIds,
-                ),
-            );
+                queryCount = rewrittenQueries.length;
 
-            log("info", "rag.retrieval.results", {
-                requestId,
-                attempt: i + 1,
-                retrievedCount: retrievedDocs.length,
-            });
+                // Vector search with user/source isolation
+                const retrievedDocs = await measureStage(
+                    requestId,
+                    "rag.retrieval.completed",
+                    {
+                        attempt: attempts,
+                        queryCount,
+                    },
+                    () => vectorSearch(
+                        rewrittenQueries,
+                        userId,
+                        sourceIds,
+                    ),
+                );
 
-            // Rerank documents
-            rerankedDocuments = await measureStage(
-                requestId,
-                "rag.reranking.completed",
-                {
-                    attempt: i + 1,
-                    inputCount: retrievedDocs.length,
-                },
-                () => rerankDocs(
-                    retrievedDocs,
-                    9,
-                    validatedQuery,
-                    feedbackQuery,
-                ),
-            );
+                retrievedCount = retrievedDocs.length;
 
-            log("info", "rag.reranking.results", {
-                requestId,
-                attempt: i + 1,
-                rerankedCount: rerankedDocuments.length,
-            });
-        }
+                log("info", "rag.retrieval.results", {
+                    requestId,
+                    attempt: attempts,
+                    queryCount,
+                    retrievedCount,
+                });
 
-        // -------------------------------------------------------------------------
-        // Generation retry
-        // -------------------------------------------------------------------------
+                // Rerank documents
+                rerankedDocuments = await measureStage(
+                    requestId,
+                    "rag.reranking.completed",
+                    {
+                        attempt: attempts,
+                        inputCount: retrievedCount,
+                    },
+                    () => rerankDocs(
+                        retrievedDocs,
+                        9,
+                        validatedQuery,
+                        feedbackQuery,
+                    ),
+                );
 
-        let generationQuery = validatedQuery;
-
-        if (failureType === "generation") {
-            if (!feedback) {
-                throw new Error("Feedback is missing before retry.");
+                log("info", "rag.reranking.results", {
+                    requestId,
+                    attempt: attempts,
+                    rerankedCount: rerankedDocuments.length,
+                });
             }
 
-            const generationFeedback = feedback.generation_feedback?.join(", ") ?? "";
+            // Generation retry feedback
+            let generationQuery = validatedQuery;
 
-            generationQuery = `${validatedQuery}, ${generationFeedback}`;
+            if (failureType === "generation") {
+                if (!feedback) {
+                    throw new Error(
+                        "Feedback is missing before retry.",
+                    );
+                }
 
-            console.log("Query with generation feedback: ", generationQuery);
+                const generationFeedback =
+                    feedback.generation_feedback?.join(", ") ?? "";
+
+                generationQuery =
+                    `${validatedQuery}, ${generationFeedback}`;
+
+                console.log(
+                    "Query with generation feedback:",
+                    generationQuery,
+                );
+            }
+
+            // Generate answer
+            console.log("Generating response...");
+
+            response = await measureStage(
+                requestId,
+                "rag.generation.completed",
+                { attempt: attempts },
+                () => generateAnswer(
+                    rerankedDocuments,
+                    generationQuery,
+                    chatHistory,
+                    requestId,
+                    onTokenUsage,
+                ),
+            );
+
+            // Evaluate answer
+            feedback = await measureStage(
+                requestId,
+                "rag.evaluation.completed",
+                { attempt: attempts },
+                () => evaluateResponse(
+                    rerankedDocuments,
+                    generationQuery,
+                    response,
+                    requestId,
+                    onTokenUsage,
+                ),
+            );
+
+            log("info", "rag.judge.decision", {
+                requestId,
+                attempt: attempts,
+                retry: feedback.retry,
+                failureType: feedback.failure_type,
+            });
+
+            // Consolidated metrics for this attempt
+            log("info", "rag.attempt.metrics", {
+                requestId,
+                attempt: attempts,
+                queryCount,
+                retrievedCount,
+                rerankedCount: rerankedDocuments.length,
+                retryRequested: feedback.retry,
+                failureType: feedback.failure_type,
+            });
+
+            // Stop or retry
+            if (!feedback.retry || i === MAX_RETRIES) {
+                log("info", "rag.completed", {
+                    requestId,
+                    status: "success",
+                    attempts,
+                    retryCount: attempts - 1,
+                    totalLatencyMs: Math.round(
+                        performance.now() - pipelineStartedAt,
+                    ),
+                });
+
+                pipelineStatus = "success";
+                return response;
+            }
+
+            log("warn", "rag.retry", {
+                requestId,
+                fromAttempt: attempts,
+                toAttempt: attempts + 1,
+                retryReason: feedback.failure_type,
+            });
+
+            // failure_type may be null according to the schema
+            failureType = feedback.failure_type ?? undefined;
         }
 
-        // -------------------------------------------------------------------------
-        // Generate answer
-        // -------------------------------------------------------------------------
-
-        console.log("Generating response...");
-
-        response = await measureStage(
+        throw new Error("RAG pipeline failed unexpectedly.");
+    } catch (error) {
+        log("error", "rag.failed", {
             requestId,
-            "rag.generation.completed",
-            { attempt: i + 1 },
-            () => generateAnswer(
-                rerankedDocuments,
-                generationQuery,
-                chatHistory,
-                requestId,
-                onTokenUsage,
+            attempts,
+            errorName:
+                error instanceof Error
+                    ? error.name
+                    : "UnknownError",
+            totalLatencyMs: Math.round(
+                performance.now() - pipelineStartedAt,
             ),
-        );
-
-        // -------------------------------------------------------------------------
-        // Judge answer
-        // -------------------------------------------------------------------------
-
-        feedback = await measureStage(
-            requestId,
-            "rag.evaluation.completed",
-            { attempt: i + 1 },
-            () => evaluateResponse(
-                rerankedDocuments,
-                generationQuery,
-                response,
-                requestId,
-                onTokenUsage,
-            ),
-        );
-
-        log("info", "rag.judge.decision", {
-            requestId,
-            attempt: i + 1,
-            retry: feedback.retry,
-            failureType: feedback.failure_type,
         });
 
-        // -------------------------------------------------------------------------
-        // Decide whether to retry
-        // -------------------------------------------------------------------------
-
-        if (!feedback.retry || i === MAX_RETRIES) {
-
-            log("info", "rag.completed", {
+        throw error;
+    } finally {
+        log(
+            pipelineStatus === "success" ? "info" : "error",
+            "llm.usage.summary",
+            {
                 requestId,
-                status: "success",
-                attempts: i + 1,
-                retryCount: i,
+                status: pipelineStatus,
+                attempts,
                 totalLatencyMs: Math.round(
-                    performance.now() - pipelineStartedAt
+                    performance.now() - pipelineStartedAt,
                 ),
-            });
-
-            log("info", "llm.usage.summary", {
-                requestId,
                 ...tokenUsage,
-            });
-
-            return response;
-        }
-
-        // failure_type can be null according to the schema
-        failureType = feedback.failure_type ?? undefined;
+            },
+        );
     }
-
-    throw new Error("RAG pipeline failed unexpectedly.");
 }
