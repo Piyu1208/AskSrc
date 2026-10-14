@@ -30,7 +30,7 @@ export function ConfirmDelete({
 
   if (busy) {
     return (
-      <span className="p-1.5 text-zinc-500">
+      <span className="p-1.5 text-[#8F8A7B]">
         <Spinner className="h-3.5 w-3.5" />
       </span>
     );
@@ -46,7 +46,7 @@ export function ConfirmDelete({
             setConfirming(false);
             onConfirm();
           }}
-          className="rounded-md bg-red-500/15 px-2 py-1 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/25"
+          className="border border-[#E2725B] px-2 py-1 text-xs text-[#E2725B] transition-colors hover:bg-[#E2725B] hover:text-[#14130F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1]"
         >
           Delete
         </button>
@@ -57,7 +57,7 @@ export function ConfirmDelete({
             e.stopPropagation();
             setConfirming(false);
           }}
-          className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          className="p-1 text-[#8F8A7B] transition-colors hover:bg-[#2A281F] hover:text-[#F3F0E8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8FAAD1]"
         >
           <Icon name="close" className="h-3.5 w-3.5" />
         </button>
@@ -74,7 +74,7 @@ export function ConfirmDelete({
         e.stopPropagation();
         setConfirming(true);
       }}
-      className={`rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-red-400 ${
+      className={`p-1.5 text-[#8F8A7B] transition-colors hover:bg-[#2A281F] hover:text-[#E2725B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8FAAD1] ${
         revealOnHover
           ? "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
           : ""

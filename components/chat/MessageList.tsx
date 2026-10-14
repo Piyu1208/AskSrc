@@ -12,6 +12,8 @@ import { SUGGESTIONS, formatTimestamp } from "@/lib/chat/utils";
 
 import { Icon, Spinner } from "./icons";
 
+const SERIF = { fontFamily: "'Source Serif 4', Georgia, serif" };
+
 const PHASE_TEXT: Record<AssistantPhase, string> = {
   retrieving: "Searching your sources for relevant passages…",
   generating: "Writing an answer…",
@@ -31,7 +33,7 @@ function TypingDots() {
       {[0, 150, 300].map((d) => (
         <span
           key={d}
-          className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-400/70 motion-reduce:animate-none"
+          className="h-1.5 w-1.5 animate-bounce bg-[#8FAAD1]/70 motion-reduce:animate-none"
           style={{ animationDelay: `${d}ms` }}
         />
       ))}
@@ -42,9 +44,12 @@ function TypingDots() {
 function Avatar({ error = false }: { error?: boolean }) {
   return (
     <div
-      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-        error ? "bg-red-950 text-red-400" : "bg-teal-700 text-white"
+      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center text-xs ${
+        error
+          ? "border border-[#E2725B] text-[#E2725B]"
+          : "bg-[#F3F0E8] text-[#14130F]"
       }`}
+      style={SERIF}
       aria-hidden="true"
     >
       {error ? "!" : "AI"}
@@ -95,17 +100,17 @@ export function MessageList({
   const empty = messages.length === 0 && !loading && !phase;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="flex-1 overflow-y-auto px-4 py-6 font-sans">
       <div className="mx-auto max-w-2xl space-y-6">
         {loading && (
-          <div className="flex justify-center pt-16 text-zinc-500">
+          <div className="flex justify-center pt-16 text-[#8F8A7B]">
             <Spinner className="h-5 w-5" />
           </div>
         )}
 
         {empty && (
           <div className="pt-16 text-center">
-            <h2 className="text-lg font-semibold text-zinc-100">
+            <h2 className="text-[26px] text-[#F3F0E8]" style={SERIF}>
               {canChat
                 ? "What would you like to know?"
                 : attachedCount > 0 && processing
@@ -113,7 +118,7 @@ export function MessageList({
                   : "Add a source to this chat"}
             </h2>
 
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-400">
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[#8F8A7B]">
               {canChat
                 ? "Ask a question and I'll answer from the sources in this chat."
                 : attachedCount > 0 && processing
@@ -128,21 +133,21 @@ export function MessageList({
                     key={s}
                     type="button"
                     onClick={() => onSuggestion(s)}
-                    className="rounded-full border border-zinc-700 bg-zinc-900 px-3.5 py-1.5 text-sm text-zinc-300 transition-colors hover:border-teal-600 hover:text-teal-300"
+                    className="border border-[#3A372F] px-3.5 py-1.5 text-sm text-[#F3F0E8] transition-colors hover:border-[#8FAAD1] hover:text-[#8FAAD1] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1]"
                   >
                     {s}
                   </button>
                 ))}
               </div>
             ) : processing ? (
-              <div className="mt-5 flex justify-center text-teal-400">
+              <div className="mt-5 flex justify-center text-[#8FAAD1]">
                 <Spinner className="h-5 w-5" />
               </div>
             ) : (
               <button
                 type="button"
                 onClick={onOpenPanel}
-                className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3.5 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-white"
+                className="mt-5 inline-flex items-center gap-1.5 bg-[#F3F0E8] px-3.5 py-2 text-sm text-[#14130F] transition-colors hover:bg-[#8FAAD1] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1]"
               >
                 <Icon name="plus" className="h-4 w-4" />
                 Add source
@@ -155,7 +160,7 @@ export function MessageList({
           if (m.role === "user") {
             return (
               <div key={m.id} className="flex justify-end">
-                <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-zinc-800 px-4 py-2.5 text-sm leading-relaxed text-zinc-100">
+                <div className="max-w-[85%] whitespace-pre-wrap border border-[#3A372F] bg-[#2A281F] px-4 py-2.5 text-sm leading-relaxed text-[#F3F0E8]">
                   {m.content}
                 </div>
               </div>
@@ -177,7 +182,9 @@ export function MessageList({
               <div className="min-w-0 flex-1">
                 <div
                   className={`whitespace-pre-wrap text-sm leading-relaxed ${
-                    m.isError ? "text-red-400" : "text-zinc-200"
+                    m.isError
+                      ? "border-l-2 border-[#E2725B] pl-3 text-[#E2725B]"
+                      : "text-[#F3F0E8]"
                   }`}
                 >
                   {m.content}
@@ -188,7 +195,7 @@ export function MessageList({
                     {labels.map((label) => (
                       <span
                         key={label}
-                        className="max-w-full truncate rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-400"
+                        className="max-w-full truncate border border-[#3A372F] px-2 py-0.5 text-[11px] text-[#8F8A7B]"
                         title={label}
                       >
                         {label}
@@ -201,7 +208,7 @@ export function MessageList({
                   <button
                     type="button"
                     onClick={() => copy(m)}
-                    className="mt-1.5 flex items-center gap-1 text-xs text-zinc-500 transition-opacity hover:text-zinc-300 focus:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                    className="mt-1.5 flex items-center gap-1 text-xs text-[#5C594C] transition-opacity hover:text-[#F3F0E8] focus:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8FAAD1] md:opacity-0 md:group-hover:opacity-100"
                   >
                     <Icon name="copy" className="h-3.5 w-3.5" />
                     {copiedId === m.id ? "Copied" : "Copy"}
@@ -215,7 +222,7 @@ export function MessageList({
         {phase && (
           <div className="flex gap-3" role="status" aria-live="polite">
             <Avatar />
-            <div className="flex items-center gap-2.5 pt-1 text-sm text-zinc-400">
+            <div className="flex items-center gap-2.5 pt-1 text-sm text-[#8F8A7B]">
               <TypingDots />
               <span>{PHASE_TEXT[phase]}</span>
             </div>

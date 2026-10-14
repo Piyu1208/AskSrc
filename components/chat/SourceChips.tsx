@@ -14,9 +14,9 @@ export function SourceChips({
   onOpenPanel: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 font-sans">
       {sources.length === 0 && (
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-[#8F8A7B]">
           No sources in this chat yet
         </span>
       )}
@@ -24,12 +24,12 @@ export function SourceChips({
       {sources.map((s) => (
         <span
           key={s.id}
-          className="flex max-w-56 items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900 py-1 pl-2.5 pr-1 text-xs text-zinc-300"
+          className="flex max-w-56 items-center gap-1.5 border border-[#3A372F] bg-[#0D0C09] py-1 pl-2.5 pr-1 text-xs text-[#F3F0E8]"
         >
           {s.status === "processing" ? (
-            <Spinner className="h-3 w-3 shrink-0 text-teal-400" />
+            <Spinner className="h-3 w-3 shrink-0 text-[#8FAAD1]" />
           ) : (
-            <Icon name={s.type} className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            <Icon name={s.type} className="h-3.5 w-3.5 shrink-0 text-[#8F8A7B]" />
           )}
           <span className="truncate" title={s.name}>
             {s.name}
@@ -38,7 +38,7 @@ export function SourceChips({
             type="button"
             onClick={() => onDetach(s.id)}
             aria-label={`Remove ${s.name} from this chat`}
-            className="rounded-full p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            className="p-0.5 text-[#8F8A7B] transition-colors hover:bg-[#2A281F] hover:text-[#F3F0E8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8FAAD1]"
           >
             <Icon name="close" className="h-3 w-3" />
           </button>
@@ -48,7 +48,7 @@ export function SourceChips({
       <button
         type="button"
         onClick={onOpenPanel}
-        className="flex items-center gap-1 rounded-full border border-dashed border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition-colors hover:border-teal-700 hover:text-teal-300"
+        className="flex items-center gap-1 border border-dashed border-[#3A372F] px-2.5 py-1 text-xs text-[#8F8A7B] transition-colors hover:border-[#8FAAD1] hover:text-[#8FAAD1] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1]"
       >
         <Icon name="plus" className="h-3 w-3" />
         Add source

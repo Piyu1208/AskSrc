@@ -36,19 +36,22 @@ export function Sidebar({
   const groups = useMemo(() => groupChatsByDate(chats), [chats]);
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950">
+    <div className="flex h-full flex-col bg-[#0D0C09] font-sans">
       <div className="px-3 pb-2 pt-4">
-        <p className="px-2 pb-3 text-sm font-semibold tracking-tight text-zinc-100">
-          Ask your sources
+        <p
+          className="px-2 pb-3 text-lg text-[#F3F0E8]"
+          style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}
+        >
+          AskSource
         </p>
 
         <button
           type="button"
           onClick={onNew}
-          className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex w-full items-center gap-2 border px-3 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1] ${
             isDraft
-              ? "border-teal-700/60 bg-teal-950/40 text-teal-200"
-              : "border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900"
+              ? "border-[#8FAAD1] bg-[#8FAAD1]/10 text-[#8FAAD1]"
+              : "border-[#3A372F] text-[#F3F0E8] hover:border-[#F3F0E8] hover:bg-[#F3F0E8] hover:text-[#14130F]"
           }`}
         >
           <Icon name="plus" className="h-4 w-4" />
@@ -61,18 +64,18 @@ export function Sidebar({
         className="flex-1 overflow-y-auto px-3 pb-3 pt-2"
       >
         {loading ? (
-          <div className="flex items-center gap-2 px-2 py-2 text-xs text-zinc-500">
+          <div className="flex items-center gap-2 px-2 py-2 text-xs text-[#8F8A7B]">
             <Spinner className="h-3.5 w-3.5" />
             Loading chats…
           </div>
         ) : groups.length === 0 ? (
-          <p className="px-2 py-2 text-xs text-zinc-500">
+          <p className="px-2 py-2 text-xs text-[#8F8A7B]">
             No chats yet. Start one above.
           </p>
         ) : (
           groups.map((group) => (
             <section key={group.label} className="mb-4">
-              <h3 className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+              <h3 className="px-2 pb-1 text-[11px] uppercase tracking-wider text-[#5C594C]">
                 {group.label}
               </h3>
 
@@ -83,16 +86,20 @@ export function Sidebar({
                   return (
                     <li
                       key={chat.id}
-                      className={`group flex items-center rounded-lg transition-colors ${
-                        active ? "bg-zinc-800/80" : "hover:bg-zinc-900"
+                      className={`group flex items-center border-l-2 transition-colors ${
+                        active
+                          ? "border-[#8FAAD1] bg-[#2A281F]"
+                          : "border-transparent hover:bg-[#1A1913]"
                       }`}
                     >
                       <button
                         type="button"
                         onClick={() => onSelect(chat.id)}
                         aria-current={active ? "true" : undefined}
-                        className={`min-w-0 flex-1 truncate px-3 py-2 text-left text-sm ${
-                          active ? "text-zinc-100" : "text-zinc-400 group-hover:text-zinc-200"
+                        className={`min-w-0 flex-1 truncate px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8FAAD1] ${
+                          active
+                            ? "text-[#F3F0E8]"
+                            : "text-[#8F8A7B] group-hover:text-[#F3F0E8]"
                         }`}
                         title={chat.title}
                       >
@@ -116,9 +123,9 @@ export function Sidebar({
         )}
       </nav>
 
-      <div className="flex items-center gap-2 border-t border-zinc-800/70 px-3 py-3">
+      <div className="flex items-center gap-2 border-t border-[#2A281F] px-3 py-3">
         <p
-          className="min-w-0 flex-1 truncate px-2 text-xs text-zinc-500"
+          className="min-w-0 flex-1 truncate px-2 text-xs text-[#8F8A7B]"
           title={userLabel}
         >
           {userLabel}
@@ -127,7 +134,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onSignOut}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-[#8F8A7B] underline decoration-[#3A372F] underline-offset-2 transition-colors hover:text-[#F3F0E8] hover:decoration-[#F3F0E8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8FAAD1]"
         >
           <Icon name="logout" className="h-3.5 w-3.5" />
           Sign out

@@ -213,7 +213,7 @@ export default function Home() {
 
   if (sessionLoading || !session) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-zinc-950 text-zinc-500 [color-scheme:dark]">
+      <div className="flex h-dvh items-center justify-center bg-[#14130F] font-sans text-[#8F8A7B] [color-scheme:dark]">
         <Spinner className="h-5 w-5" />
       </div>
     );
@@ -235,9 +235,9 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-dvh bg-zinc-950 text-zinc-100 [color-scheme:dark]">
+    <div className="flex h-dvh bg-[#14130F] font-sans text-[#F3F0E8] [color-scheme:dark]">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-zinc-800/70 md:block">
+      <aside className="hidden w-64 shrink-0 border-r border-[#2A281F] bg-[#0D0C09] md:block">
         {sidebar}
       </aside>
 
@@ -248,7 +248,7 @@ export default function Home() {
             className="absolute inset-0 bg-black/60"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-[80%] max-w-xs border-r border-zinc-800 shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-[80%] max-w-xs border-r border-[#2A281F] bg-[#0D0C09] shadow-xl">
             {sidebar}
           </aside>
         </div>
@@ -262,17 +262,20 @@ export default function Home() {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <header className="flex items-center gap-2 border-b border-zinc-800/70 px-4 py-3">
+        <header className="flex items-center gap-2 border-b border-[#2A281F] px-4 py-3">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 md:hidden"
+            className="p-1.5 text-[#8F8A7B] transition-colors hover:bg-[#2A281F] hover:text-[#F3F0E8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1] md:hidden"
             aria-label="Open chat history"
           >
             <Icon name="menu" className="h-5 w-5" />
           </button>
 
-          <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">
+          <h1
+            className="min-w-0 flex-1 truncate text-lg font-normal text-[#F3F0E8]"
+            style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}
+          >
             {selectedChat?.title || "New chat"}
           </h1>
 
@@ -280,22 +283,23 @@ export default function Home() {
             type="button"
             onClick={() => setPanelOpen((v) => !v)}
             aria-pressed={panelOpen}
-            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${panelOpen
-                ? "border-teal-700/60 bg-teal-950/40 text-teal-200"
-                : "border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900"
-              }`}
+            className={`flex items-center gap-1.5 border px-2.5 py-1.5 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1] ${
+              panelOpen
+                ? "border-[#8FAAD1] bg-[#8FAAD1]/10 text-[#8FAAD1]"
+                : "border-[#3A372F] text-[#F3F0E8] hover:border-[#F3F0E8] hover:bg-[#F3F0E8] hover:text-[#14130F]"
+            }`}
           >
             <Icon name="panel" className="h-3.5 w-3.5" />
             Sources
             {sources.length > 0 && (
-              <span className="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">
+              <span className="bg-[#2A281F] px-1 text-[10px] text-[#8F8A7B]">
                 {sources.length}
               </span>
             )}
           </button>
         </header>
 
-        <div className="border-b border-zinc-800/70 px-4 py-2.5">
+        <div className="border-b border-[#2A281F] px-4 py-2.5">
           <SourceChips
             sources={attachedSources}
             onDetach={(id) => void detach(id)}
@@ -324,15 +328,18 @@ export default function Home() {
 
         {dragKind && (
           <div
-            className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-teal-600/70 bg-zinc-950/85"
+            className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center border-2 border-dashed border-[#8FAAD1]/70 bg-[#14130F]/90"
             aria-hidden="true"
           >
             <div className="text-center">
               <Icon
                 name={dragKind === "file" ? "upload" : "plus"}
-                className="mx-auto mb-2 h-6 w-6 text-teal-400"
+                className="mx-auto mb-2 h-6 w-6 text-[#8FAAD1]"
               />
-              <p className="text-sm font-medium text-teal-200">
+              <p
+                className="text-base text-[#F3F0E8]"
+                style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}
+              >
                 {dragKind === "file"
                   ? "Drop PDFs to add them to this chat"
                   : "Drop to add this source to the chat"}
