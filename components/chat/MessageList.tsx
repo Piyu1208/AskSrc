@@ -44,7 +44,7 @@ function TypingDots() {
 function Avatar({ error = false }: { error?: boolean }) {
   return (
     <div
-      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center text-xs ${
+      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-xs ${
         error
           ? "border border-[#E2725B] text-[#E2725B]"
           : "bg-[#F3F0E8] text-[#14130F]"
@@ -101,7 +101,7 @@ export function MessageList({
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 font-sans">
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="mx-auto max-w-3xl space-y-7">
         {loading && (
           <div className="flex justify-center pt-16 text-[#8F8A7B]">
             <Spinner className="h-5 w-5" />
@@ -160,7 +160,7 @@ export function MessageList({
           if (m.role === "user") {
             return (
               <div key={m.id} className="flex justify-end">
-                <div className="max-w-[85%] whitespace-pre-wrap border border-[#3A372F] bg-[#2A281F] px-4 py-2.5 text-sm leading-relaxed text-[#F3F0E8]">
+                <div className="max-w-[85%] whitespace-pre-wrap border border-[#3A372F] bg-[#2A281F] px-5 py-3 text-base leading-6 text-[#F3F0E8]">
                   {m.content}
                 </div>
               </div>
@@ -181,7 +181,7 @@ export function MessageList({
 
               <div className="min-w-0 flex-1">
                 <div
-                  className={`whitespace-pre-wrap text-sm leading-relaxed ${
+                  className={`whitespace-pre-wrap text-base leading-6 ${
                     m.isError
                       ? "border-l-2 border-[#E2725B] pl-3 text-[#E2725B]"
                       : "text-[#F3F0E8]"

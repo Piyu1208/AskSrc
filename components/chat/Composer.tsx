@@ -58,7 +58,7 @@ export function Composer({
 
   return (
     <div className="px-4 pb-4 pt-2 font-sans">
-      <form onSubmit={onSubmit} className="mx-auto max-w-2xl">
+      <form onSubmit={onSubmit} className="mx-auto max-w-3xl">
         <div
           className={`flex items-end gap-2 border p-2 transition-colors focus-within:border-[#8FAAD1] ${
             disabled
