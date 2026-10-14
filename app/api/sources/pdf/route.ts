@@ -18,6 +18,8 @@ import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
+const MAX_SIZE = 10 * 1024 * 1024;
+
 // --------------------------------------------------
 // Types
 // --------------------------------------------------
@@ -118,15 +120,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
+
     // --------------------------------------------------
     // 3. Validate PDF
     // --------------------------------------------------
 
-    if (pdfFile.type !== "application/pdf") {
+    if (
+      pdfFile.type !== "application/pdf" || 
+      !pdfFile.name.toLowerCase().endsWith(".pdf")
+    ) {
       return NextResponse.json(
         {
           error: "Only PDF files are supported.",
         },
+        { status: 400 }
+      );
+    }
+
+    // --------------------------------------------------
+    // 4. Check pdf size
+    // --------------------------------------------------
+
+    if (pdfFile.size === 0 || pdfFile.size > MAX_SIZE) {
+      return NextResponse.json(
+        { error: "File size must be within 10MB" },
+        { status: 400 }
+      );
+    }
+
+    // --------------------------------------------------
+    // 5. Check file signature
+    // --------------------------------------------------
+
+    const header = new Uint8Array(
+      await pdfFile.slice(0, 5).arrayBuffer()
+    );
+
+    if (new TextDecoder().decode(header) !== "%PDF-") {
+      return NextResponse.json(
+        { error: "Invalid PDF file." },
         { status: 400 }
       );
     }
@@ -282,11 +314,7 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json(
-      {
-        error:
-          err?.message ||
-          "Failed to process PDF.",
-      },
+      { error: "Failed to process PDF." },
       { status: 500 }
     );
   }
