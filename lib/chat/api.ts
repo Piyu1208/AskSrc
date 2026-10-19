@@ -46,6 +46,7 @@ type RawSource = {
   id: string;
   name: string;
   type: "youtube" | "pdf";
+  status: "processing" | "completed" | "failed";
   chunks: number;
 };
 
@@ -99,7 +100,7 @@ export async function listSources(): Promise<Source[]> {
     id: s.id,
     name: s.name,
     type: s.type,
-    status: "ready" as const,
+    status: s.status,
     chunks: s.chunks,
   }));
 }

@@ -44,7 +44,7 @@ function SourceRow({
   onDelete: () => void;
   onDismiss: () => void;
 }) {
-  const ready = source.status === "ready";
+  const ready = source.status === "completed";
 
   return (
     <li
@@ -87,7 +87,7 @@ function SourceRow({
             </p>
           )}
 
-          {source.status === "error" && (
+          {source.status === "failed" && (
             <p className="mt-0.5 flex items-start gap-1.5 border-l-2 border-[#E2725B] pl-2 text-xs text-[#E2725B]">
               <Icon name="alert" className="mt-px h-3.5 w-3.5 shrink-0" />
               {source.error}
@@ -104,7 +104,7 @@ function SourceRow({
           />
         )}
 
-        {source.status === "error" && (
+        {source.status === "failed" && (
           <button
             type="button"
             onClick={onDismiss}

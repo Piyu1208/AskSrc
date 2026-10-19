@@ -1,10 +1,10 @@
-export type SourceStatus = "processing" | "ready" | "error";
+export type SourceStatus = "processing" | "completed" | "failed";
 
 export type Source = {
   id: string;
   type: "youtube" | "pdf";
   name: string;
-  status: SourceStatus;
+  status?: SourceStatus;
   chunks?: number;
   error?: string;
 };

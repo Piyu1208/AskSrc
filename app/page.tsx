@@ -94,13 +94,29 @@ export default function Home() {
     void refreshChats();
   }, [session, sessionLoading, router, refreshSources, refreshChats]);
 
+  /* -------------------------- Source status polling -------------------------- */
+
+  useEffect(() => {
+    const hasProcessingSource = sources.some(
+      (source) => source.status === "processing",
+    );
+
+    if (!hasProcessingSource) return;
+
+    const intervalId = setInterval(() => {
+      void refreshSources();
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [sources, refreshSources]);
+
   /* ------------------------------ Derived state ----------------------------- */
 
   const attachedSources = attachedIds
     .map((id) => sourceMap.get(id))
     .filter((s): s is NonNullable<typeof s> => Boolean(s));
 
-  const readyAttached = attachedSources.filter((s) => s.status === "ready");
+  const readyAttached = attachedSources.filter((s) => s.status === "completed");
   const canChat = readyAttached.length > 0;
   const processingAttached = attachedSources.some(
     (s) => s.status === "processing",
@@ -203,7 +219,7 @@ export default function Home() {
 
     if (kind === "source") {
       const id = e.dataTransfer.getData(SOURCE_DRAG_TYPE);
-      if (id && sourceMap.get(id)?.status === "ready") void attach(id);
+      if (id && sourceMap.get(id)?.status === "completed") void attach(id);
     } else {
       void handleFiles(Array.from(e.dataTransfer.files));
     }
@@ -283,11 +299,10 @@ export default function Home() {
             type="button"
             onClick={() => setPanelOpen((v) => !v)}
             aria-pressed={panelOpen}
-            className={`flex items-center gap-1.5 border px-2.5 py-1.5 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1] ${
-              panelOpen
+            className={`flex items-center gap-1.5 border px-2.5 py-1.5 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8FAAD1] ${panelOpen
                 ? "border-[#8FAAD1] bg-[#8FAAD1]/10 text-[#8FAAD1]"
                 : "border-[#3A372F] text-[#F3F0E8] hover:border-[#F3F0E8] hover:bg-[#F3F0E8] hover:text-[#14130F]"
-            }`}
+              }`}
           >
             <Icon name="panel" className="h-3.5 w-3.5" />
             Sources

@@ -27,10 +27,17 @@ export function useSources({ onUnauthorized, onError }: Options) {
     try {
       const list = await api.listSources();
       // Keep in-flight / failed temporary rows; replace everything persisted.
-      setSources((prev) => [
-        ...prev.filter((s) => s.status !== "ready"),
-        ...list,
-      ]);
+      setSources((prev) => {
+        const persistedIds = new Set(list.map((s) => s.id));
+
+        const temporarySources = prev.filter(
+          (s) =>
+            (s.status === "processing" || s.status === "failed") &&
+            !persistedIds.has(s.id),
+        );
+
+        return [...temporarySources, ...list];
+      });
     } catch (err) {
       if (err instanceof api.ApiError && err.status === 401) onUnauthorized();
       else onError(errorMessage(err, "Couldn't load your sources."));
@@ -65,12 +72,12 @@ export function useSources({ onUnauthorized, onError }: Options) {
           prev.map((s) =>
             s.id === tempId
               ? {
-                  id: result.sourceId,
-                  type,
-                  name: result.fileName ?? name,
-                  status: "ready",
-                  chunks: result.chunksIndexed,
-                }
+                id: result.sourceId,
+                type,
+                name: result.fileName ?? name,
+                status: "completed",
+                chunks: result.chunksIndexed,
+              }
               : s,
           ),
         );
@@ -86,7 +93,7 @@ export function useSources({ onUnauthorized, onError }: Options) {
         setSources((prev) =>
           prev.map((s) =>
             s.id === tempId
-              ? { ...s, status: "error", error: errorMessage(err, fallbackError) }
+              ? { ...s, status: "failed", error: errorMessage(err, fallbackError) }
               : s,
           ),
         );
