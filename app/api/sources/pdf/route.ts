@@ -1,89 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
-
-import { v4 as uuidv4 } from "uuid";
-
-import {
-  qdrant,
-  ensureCollection,
-  COLLECTION_NAME,
-} from "@/lib/rag/qdrant";
-
-import { embedTexts } from "@/lib/rag/embeddings";
-
-import { extractText } from "unpdf";
+﻿import { NextRequest, NextResponse } from "next/server";
 
 import { getSession } from "@/lib/get-session";
 import { createSource } from "@/lib/sources";
-import { getDb } from "@/lib/db";
+import { uploadPdf } from "@/lib/cloudinary";
+import { inngest } from "@/lib/inngest/client";
 
 export const runtime = "nodejs";
 
 const MAX_SIZE = 10 * 1024 * 1024;
 
 // --------------------------------------------------
-// Types
-// --------------------------------------------------
-
-type PageChunk = {
-  text: string;
-  pageNumber: number;
-};
-
-// --------------------------------------------------
-// Chunk a single page
-// --------------------------------------------------
-
-function chunkPage(
-  text: string,
-  pageNumber: number,
-  chunkSize = 600,
-  overlap = 50
-): PageChunk[] {
-  const words = text
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ");
-
-  if (words.length === 0 || words[0] === "") {
-    return [];
-  }
-
-  const chunks: PageChunk[] = [];
-
-  let start = 0;
-
-  while (start < words.length) {
-    const end = Math.min(
-      start + chunkSize,
-      words.length
-    );
-
-    const chunk = words
-      .slice(start, end)
-      .join(" ");
-
-    if (chunk.trim()) {
-      chunks.push({
-        text: chunk,
-        pageNumber,
-      });
-    }
-
-    if (end === words.length) {
-      break;
-    }
-
-    start = end - overlap;
-  }
-
-  return chunks;
-}
-
-// --------------------------------------------------
 // POST /api/sources/pdf
 //
 // Body: multipart/form-data
 // field: file
+//
+// Flow:
+//   1. Authenticate user
+//   2. Get uploaded file
+//   3. Validate PDF (type + extension + magic bytes)
+//   4. Upload PDF to Cloudinary
+//   5. Create MongoDB source record (status: processing)
+//   6. Trigger Inngest background job (chunk + embed + Qdrant)
+//   7. Return 202 Accepted immediately
 // --------------------------------------------------
 
 export async function POST(req: NextRequest) {
@@ -120,13 +59,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-
     // --------------------------------------------------
-    // 3. Validate PDF
+    // 3. Validate PDF type and extension
     // --------------------------------------------------
 
     if (
-      pdfFile.type !== "application/pdf" || 
+      pdfFile.type !== "application/pdf" ||
       !pdfFile.name.toLowerCase().endsWith(".pdf")
     ) {
       return NextResponse.json(
@@ -149,7 +87,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --------------------------------------------------
-    // 5. Check file signature
+    // 5. Safety check: verify PDF magic bytes (%PDF-)
     // --------------------------------------------------
 
     const header = new Uint8Array(
@@ -158,160 +96,78 @@ export async function POST(req: NextRequest) {
 
     if (new TextDecoder().decode(header) !== "%PDF-") {
       return NextResponse.json(
-        { error: "Invalid PDF file." },
+        { error: "Invalid PDF file — failed safety check." },
         { status: 400 }
       );
     }
 
     // --------------------------------------------------
-    // 4. Read PDF
+    // 6. Read the full file into a buffer
     // --------------------------------------------------
 
     const arrayBuffer = await pdfFile.arrayBuffer();
-
-    const pdfData = new Uint8Array(arrayBuffer);
-
-    // --------------------------------------------------
-    // 5. Extract text page-by-page
-    // --------------------------------------------------
-
-    const { text, totalPages } = await extractText(
-      pdfData,
-      {
-        mergePages: false,
-      }
-    );
-
-    const allChunks: PageChunk[] = [];
-
-    text.forEach((pageText, index) => {
-      const pageChunks = chunkPage(
-        pageText,
-        index + 1
-      );
-
-      allChunks.push(...pageChunks);
-    });
+    const buffer = Buffer.from(arrayBuffer);
 
     // --------------------------------------------------
-    // 6. Validate extracted text
+    // 7. Upload PDF to Cloudinary
     // --------------------------------------------------
 
-    if (allChunks.length === 0) {
+    let uploadResult;
+    try {
+      uploadResult = await uploadPdf(buffer, pdfFile.name);
+    } catch (err) {
+      console.error("Cloudinary upload error:", err);
       return NextResponse.json(
-        {
-          error:
-            "Could not extract any usable text from the PDF.",
-        },
-        { status: 422 }
+        { error: "Failed to upload file to cloud storage." },
+        { status: 500 }
       );
     }
 
     // --------------------------------------------------
-    // 7. Generate embeddings
-    // --------------------------------------------------
-
-    const texts = allChunks.map(
-      (chunk) => chunk.text
-    );
-
-    const vectors = await embedTexts(texts);
-
-    if (vectors.length !== allChunks.length) {
-      throw new Error(
-        "Embedding count does not match chunk count."
-      );
-    }
-
-    // --------------------------------------------------
-    // 8. Create MongoDB source
+    // 8. Create MongoDB source record (chunk count = 0 until ingested)
     // --------------------------------------------------
 
     const source = await createSource(
       userId,
       pdfFile.name,
       "pdf",
-      allChunks.length,
+      0,
     );
 
     const sourceId = source.id;
 
+    // --------------------------------------------------
+    // 9. Trigger Inngest background job (chunk + embed + Qdrant)
+    // --------------------------------------------------
 
-
-    const db = await getDb();
-
-
-    try {
-
-      // --------------------------------------------------
-      // 9. Ensure Qdrant collection
-      // --------------------------------------------------
-
-      await ensureCollection();
-
-      // --------------------------------------------------
-      // 10. Create Qdrant points
-      // --------------------------------------------------
-
-      const points = allChunks.map(
-        (chunk, index) => ({
-          id: uuidv4(),
-
-          vector: vectors[index],
-
-          payload: {
-            // Ownership
-            userId,
-            sourceId,
-
-            // Source information
-            sourceType: "pdf" as const,
-            sourceName: pdfFile.name,
-
-            // Chunk information
-            chunkIndex: index,
-            pageNumber: chunk.pageNumber,
-            text: chunk.text,
-          },
-        })
-      );
-
-      // --------------------------------------------------
-      // 11. Store in Qdrant
-      // --------------------------------------------------
-
-      await qdrant.upsert(COLLECTION_NAME, {
-        wait: true,
-        points,
-      });
-    } catch (error) {
-      // Qdrant failed, so remove the Mongo source
-      await db.collection("sources").deleteOne({
-        id: sourceId,
+    await inngest.send({
+      name: "app/pdf.ingested",
+      data: {
         userId,
-      });
-
-      throw error;
-    }
-
-
-    // --------------------------------------------------
-    // 12. Return result
-    // --------------------------------------------------
-
-    return NextResponse.json({
-      success: true,
-      sourceId,
-      sourceType: "pdf",
-      fileName: pdfFile.name,
-      pages: totalPages,
-      chunksIndexed: allChunks.length,
+        sourceId,
+        fileName: pdfFile.name,
+        cloudinaryUrl: uploadResult.secure_url,
+        cloudinaryPublicId: uploadResult.public_id,
+      },
     });
-  } catch (err: any) {
-    console.error(
-      "PDF ingestion error:",
-      err
+
+    // --------------------------------------------------
+    // 10. Return 202 Accepted
+    // --------------------------------------------------
+
+    return NextResponse.json(
+      {
+        success: true,
+        status: "processing",
+        sourceId,
+        fileName: pdfFile.name,
+        message:
+          "PDF uploaded safely and queued for background ingestion via Inngest.",
+      },
+      { status: 202 }
     );
+  } catch (err: any) {
+    console.error("PDF upload error:", err);
 
     return NextResponse.json(
       { error: "Failed to process PDF." },
