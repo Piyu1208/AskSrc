@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/get-session";
 import { getDb } from "@/lib/db";
 import { qdrant, COLLECTION_NAME } from "@/lib/rag/qdrant";
+import type { Chat } from "@/lib/models/chat";
+import { deletePdf } from "@/lib/cloudinary";
 
 type RouteContext = {
   params: Promise<{
@@ -61,8 +63,16 @@ export async function DELETE(
       );
     }
 
+    // -------------------------------------------------
+    // 4. Delete PDF from cloudinary
+    // -------------------------------------------------
+
+    if (typeof source.cloudinaryPublicId === "string" && source.cloudinaryPublicId) {
+      await deletePdf(source.cloudinaryPublicId);
+    }
+
     // --------------------------------------------------
-    // 4. Delete Qdrant vectors
+    // 5. Delete Qdrant vectors
     // --------------------------------------------------
 
     await qdrant.delete(COLLECTION_NAME, {
@@ -86,13 +96,26 @@ export async function DELETE(
     });
 
     // --------------------------------------------------
-    // 5. Delete MongoDB source
+    // 6. Delete MongoDB source
     // --------------------------------------------------
 
     await db.collection("sources").deleteOne({
       id: sourceId,
       userId,
     });
+
+    // 7. Remove source from all of this user's chats
+    await db.collection<Chat>("chats").updateMany(
+      {
+        userId,
+        sourceIds: sourceId,
+      },
+      {
+        $pull: {
+          sourceIds: sourceId,
+        },
+      },
+    );
 
     return NextResponse.json({
       success: true,

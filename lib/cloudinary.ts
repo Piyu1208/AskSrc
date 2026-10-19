@@ -44,9 +44,14 @@ export async function uploadPdf(
  * Delete a previously uploaded PDF from Cloudinary by public id.
  */
 export async function deletePdf(publicId: string): Promise<void> {
-  await cloudinary.uploader.destroy(publicId, {
+  const result = await cloudinary.uploader.destroy(publicId, {
     resource_type: "raw",
+    type: "private",
   });
+
+  if (result.result !== "ok" && result.result !== "not found") {
+    throw new Error("Failed to delete Cloudinary asset.");
+  }
 }
 
 export { cloudinary };
