@@ -132,6 +132,7 @@ export async function POST(req: NextRequest) {
       pdfFile.name,
       "pdf",
       0,
+      "processing",
     );
 
     const sourceId = source.id;

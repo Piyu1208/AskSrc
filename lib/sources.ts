@@ -1,12 +1,15 @@
 import { getDb } from "@/lib/db";
 import { randomUUID } from "crypto";
 
+export type SourceStatus = "processing" | "completed" | "failed";
+
 export type Source = {
     id: string;
     userId: string;
     name: string;
     type: "youtube" | "pdf";
     chunks: number;
+    status: SourceStatus;
     createdAt: Date;
 };
 
@@ -15,6 +18,7 @@ export async function createSource(
     name: string,
     type: Source["type"],
     chunks: number,
+    status: SourceStatus = "processing",
 ) {
     const db = await getDb();
 
@@ -24,12 +28,26 @@ export async function createSource(
         name,
         type,
         chunks,
+        status,
         createdAt: new Date(),
     };
 
     await db.collection<Source>("sources").insertOne(source);
 
     return source;
+}
+
+export async function updateSourceStatus(
+    sourceId: string,
+    userId: string,
+    status: SourceStatus,
+) {
+    const db = await getDb();
+
+    await db.collection<Source>("sources").updateOne(
+        { id: sourceId, userId },
+        { $set: { status } },
+    );
 }
 
 export async function getSourcesByUser(userId: string) {
