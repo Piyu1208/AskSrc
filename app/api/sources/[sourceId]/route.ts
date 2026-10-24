@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getSession } from "@/lib/get-session";
 import { getDb } from "@/lib/db";
-import { qdrant, COLLECTION_NAME } from "@/lib/rag/qdrant";
-import type { Chat } from "@/lib/models/chat";
-import { deletePdf } from "@/lib/cloudinary";
+import { inngest } from "@/lib/inngest/client";
 
 type RouteContext = {
   params: Promise<{
@@ -63,70 +61,78 @@ export async function DELETE(
       );
     }
 
-    // -------------------------------------------------
-    // 4. Delete PDF from cloudinary
-    // -------------------------------------------------
-
-    if (typeof source.cloudinaryPublicId === "string" && source.cloudinaryPublicId) {
-      await deletePdf(source.cloudinaryPublicId);
+    if (source.status === "deleting") {
+      return NextResponse.json(
+        { error: "Source deletion is already in progress." },
+        { status: 409 },
+      );
     }
 
-    // --------------------------------------------------
-    // 5. Delete Qdrant vectors
-    // --------------------------------------------------
+    if (source.status === "processing") {
+      return NextResponse.json(
+        { error: "Cannot delete a source while it is processing." },
+        { status: 409 },
+      );
+    }
 
-    await qdrant.delete(COLLECTION_NAME, {
-      wait: true,
-      filter: {
-        must: [
-          {
-            key: "userId",
-            match: {
-              value: userId,
-            },
-          },
-          {
-            key: "sourceId",
-            match: {
-              value: sourceId,
-            },
-          },
-        ],
-      },
-    });
-
-    // --------------------------------------------------
-    // 6. Delete MongoDB source
-    // --------------------------------------------------
-
-    await db.collection("sources").deleteOne({
-      id: sourceId,
-      userId,
-    });
-
-    // 7. Remove source from all of this user's chats
-    await db.collection<Chat>("chats").updateMany(
+    // 4. Mark source as deleting
+    const updateResult = await db.collection("sources").updateOne(
       {
+        id: sourceId,
         userId,
-        sourceIds: sourceId,
+        status: source.status,
       },
       {
-        $pull: {
-          sourceIds: sourceId,
-        },
+        $set: { status: "deleting" },
       },
     );
 
-    return NextResponse.json({
-      success: true,
-      sourceId,
-    });
+    if (updateResult.modifiedCount !== 1) {
+      return NextResponse.json(
+        { error: "Source status changed. Please try again." },
+        { status: 409 },
+      );
+    }
+
+    // 5. Trigger deletion background job
+    try {
+      await inngest.send({
+        name: "source/delete.requested",
+        data: {
+          userId,
+          sourceId,
+        },
+      });
+    } catch (error) {
+      // Restore the previous status if the event cannot be sent.
+      await db.collection("sources").updateOne(
+        {
+          id: sourceId,
+          userId,
+          status: "deleting",
+        },
+        {
+          $set: { status: source.status },
+        },
+      );
+
+      throw error;
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        sourceId,
+        status: "deleting",
+      },
+      { status: 202 },
+    );
   } catch (error) {
     console.error("Delete source error:", error);
 
     return NextResponse.json(
       {
-        error: "Failed to delete source.",
+        error: "Failed to mark source for deletion.",
       },
       { status: 500 },
     );
