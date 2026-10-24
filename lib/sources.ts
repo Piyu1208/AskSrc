@@ -1,7 +1,7 @@
 import { getDb } from "@/lib/db";
 import { randomUUID } from "crypto";
 
-export type SourceStatus = "processing" | "completed" | "failed";
+export type SourceStatus = "processing" | "completed" | "failed" | "deleting";
 
 export type Source = {
     id: string;
