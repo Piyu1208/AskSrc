@@ -1,52 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { YoutubeTranscript } from "youtube-transcript";
-import { v4 as uuidv4 } from "uuid";
-
-import {
-  qdrant,
-  ensureCollection,
-  COLLECTION_NAME,
-} from "@/lib/rag/qdrant";
-
-import { embedTexts } from "@/lib/rag/embeddings";
-
-import {
-  chunkTranscript,
-  type TranscriptItem,
-} from "@/lib/chunk";
 
 import { getSession } from "@/lib/get-session";
-import { createSource } from "@/lib/sources";
-import { getDb } from "@/lib/db";
+import { createSource, updateSource } from "@/lib/sources";
+import { inngest } from "@/lib/inngest/client";
 
 export const runtime = "nodejs";
 
-function extractVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=)([^&]+)/,
-    /(?:youtu\.be\/)([^?]+)/,
-    /(?:youtube\.com\/embed\/)([^?]+)/,
-    /(?:youtube\.com\/shorts\/)([^?]+)/,
-  ];
+function extractVideoId(input: string): string | null {
+  try {
+    // Allow pasted links without a scheme, e.g. "youtube.com/watch?v=...".
+    const normalized = /^https?:\/\//i.test(input)
+      ? input
+      : `https://${input}`;
 
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
+    const url = new URL(normalized);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
 
-    if (match) {
-      return match[1];
+    let videoId: string | null = null;
+
+    if (host === "youtu.be") {
+      videoId = url.pathname.split("/").filter(Boolean)[0] ?? null;
+    } else if (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "music.youtube.com"
+    ) {
+      if (url.pathname === "/watch") {
+        videoId = url.searchParams.get("v");
+      } else {
+        const match = url.pathname.match(
+          /^\/(?:embed|shorts|live)\/([^/]+)/,
+        );
+        videoId = match?.[1] ?? null;
+      }
     }
+
+    // Standard YouTube video IDs contain 11 URL-safe characters.
+    return videoId && /^[\w-]{11}$/.test(videoId) ? videoId : null;
+  } catch {
+    return null;
   }
-
-  return null;
-}
-
-function createTimestampUrl(
-  videoId: string,
-  startTime: number
-): string {
-  return `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(
-    startTime
-  )}s`;
 }
 
 // POST /api/sources/youtube
@@ -54,200 +47,86 @@ function createTimestampUrl(
 
 export async function POST(req: NextRequest) {
   try {
-    // --------------------------------------------------
-    // 1. Authenticate user
-    // --------------------------------------------------
-
+    // 1. Authenticate.
     const session = await getSession();
 
     if (!session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = session.user.id;
 
-    // --------------------------------------------------
-    // 2. Validate request
-    // --------------------------------------------------
-
+    // 2. Validate the request and URL.
     const body = await req.json().catch(() => null);
     const url = body?.url;
 
-    if (!url || typeof url !== "string") {
+    if (typeof url !== "string" || !url.trim()) {
       return NextResponse.json(
         { error: "A valid 'url' field is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // --------------------------------------------------
-    // 3. Extract video ID
-    // --------------------------------------------------
-
-    const videoId = extractVideoId(url);
+    const videoId = extractVideoId(url.trim());
 
     if (!videoId) {
       return NextResponse.json(
-        {
-          error:
-            "Could not parse a YouTube video ID from that URL.",
-        },
-        { status: 400 }
+        { error: "Could not parse a valid YouTube video ID." },
+        { status: 400 },
       );
     }
 
-    // --------------------------------------------------
-    // 4. Fetch captions
-    // --------------------------------------------------
+    // Store a canonical URL rather than whatever the user pasted
+    // (tracking params, playlist ids, etc.).
+    const sourceUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    const transcript =
-      await YoutubeTranscript.fetchTranscript(videoId);
-
-    if (!transcript || transcript.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "No captions/transcript available for this video.",
-        },
-        { status: 422 }
-      );
-    }
-
-    const transcriptItems: TranscriptItem[] = transcript.map(
-      (item) => ({
-        text: item.text,
-        start: item.offset / 1000,
-        duration: item.duration / 1000,
-      })
-    );
-
-    // --------------------------------------------------
-    // 5. Chunk transcript
-    // --------------------------------------------------
-
-    const chunks = chunkTranscript(transcriptItems);
-
-    if (chunks.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Transcript produced no usable chunks.",
-        },
-        { status: 422 }
-      );
-    }
-
-    // --------------------------------------------------
-    // 6. Generate embeddings
-    // --------------------------------------------------
-
-    const texts = chunks.map((chunk) => chunk.text);
-
-    const vectors = await embedTexts(texts);
-
-    if (vectors.length !== chunks.length) {
-      throw new Error(
-        "Embedding count does not match chunk count."
-      );
-    }
-
-    // --------------------------------------------------
-    // 7. Create source
-    // --------------------------------------------------
-
-    const source = await createSource(
-      userId,
-      videoId,
-      "youtube",
-      chunks.length,
-    );
-
+    // 3. Create the source before dispatching the job.
+    const source = await createSource(userId, videoId, "youtube", 0);
     const sourceId = source.id;
 
-    const db = await getDb();
+    // Ensure the initial status is processing.
+    await updateSource(sourceId, userId, "processing");
 
+    console.log({
+      submittedUrl: sourceUrl,
+      extractedVideoId: videoId,
+    });
+
+    // 4. Trigger background indexing.
     try {
-      // --------------------------------------------------
-      // 8. Ensure Qdrant collection
-      // --------------------------------------------------
-
-      await ensureCollection();
-
-      // --------------------------------------------------
-      // 9. Create Qdrant points
-      // --------------------------------------------------
-
-      const points = chunks.map((chunk, index) => ({
-        id: uuidv4(),
-
-        vector: vectors[index],
-
-        payload: {
-          // Ownership
-          userId,
+      await inngest.send({
+        name: "app/yt-ingested",
+        data: {
           sourceId,
-
-          // Source information
-          sourceType: "youtube" as const,
-          sourceUrl: url,
+          userId,
           videoId,
-
-          // Chunk information
-          chunkIndex: index,
-          text: chunk.text,
-
-          // Timestamp information
-          startTime: chunk.startTime,
-          endTime: chunk.endTime,
-          timestampUrl: createTimestampUrl(
-            videoId,
-            chunk.startTime
-          ),
+          sourceUrl,
         },
-      }));
-
-      // --------------------------------------------------
-      // 10. Store in Qdrant
-      // --------------------------------------------------
-
-      await qdrant.upsert(COLLECTION_NAME, {
-        wait: true,
-        points,
       });
     } catch (error) {
-      await db.collection("sources").deleteOne({
-        id: sourceId,
-        userId,
-      });
+      // Keep the record visible, but don't leave it processing.
+      await updateSource(sourceId, userId, "failed");
 
       throw error;
     }
 
-
-
-    // --------------------------------------------------
-    // 11. Return result
-    // --------------------------------------------------
-
-    return NextResponse.json({
-      success: true,
-      sourceId,
-      sourceType: "youtube",
-      videoId,
-      chunksIndexed: chunks.length,
-    });
-  } catch (err: any) {
-    console.error("YouTube ingestion error:", err);
-
+    // 5. Return immediately; indexing happens in the background.
     return NextResponse.json(
       {
-        error:
-          err?.message ||
-          "Failed to process YouTube link.",
+        success: true,
+        sourceId,
+        sourceType: "youtube",
+        videoId,
+        status: "processing",
       },
-      { status: 500 }
+      { status: 202 },
+    );
+  } catch (error) {
+    console.error("YouTube ingestion request error:", error);
+
+    return NextResponse.json(
+      { error: "Failed to queue YouTube indexing." },
+      { status: 500 },
     );
   }
 }
