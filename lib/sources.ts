@@ -41,13 +41,14 @@ export async function updateSource(
     sourceId: string,
     userId: string,
     status: SourceStatus,
-    chunks?: number
+    chunks?: number,
+    name?: string,
 ) {
     const db = await getDb();
 
     return db.collection<Source>("sources").updateOne(
         { id: sourceId, userId },
-        { $set: { chunks, status } },
+        { $set: { chunks, status, name } },
     );
 }
 
