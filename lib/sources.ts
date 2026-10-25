@@ -37,16 +37,17 @@ export async function createSource(
     return source;
 }
 
-export async function updateSourceStatus(
+export async function updateSource(
     sourceId: string,
     userId: string,
     status: SourceStatus,
+    chunks?: number
 ) {
     const db = await getDb();
 
-    await db.collection<Source>("sources").updateOne(
+    return db.collection<Source>("sources").updateOne(
         { id: sourceId, userId },
-        { $set: { status } },
+        { $set: { chunks, status } },
     );
 }
 
